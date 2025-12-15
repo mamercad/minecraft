@@ -74,16 +74,18 @@ class CreateServerScreen(Screen):
         self.max_steps = 4
 
         # Detect default SSH key
+        from ..utils.name_generator import generate_server_name
         from ..utils.ssh_helper import get_default_ssh_key_path
 
         default_ssh_key = get_default_ssh_key_path()
+        default_name = generate_server_name()
 
         self.server_data = {
-            "server_type": None,
+            "server_type": ServerType.VANILLA,  # Default to vanilla
             "minecraft_version": "1.20.1",
             "forge_version": None,
             "modpack_url": None,
-            "name": "",
+            "name": default_name,  # Auto-generated name
             "max_players": 20,
             "memory_mb": 3072,
             "accept_eula": False,
@@ -138,7 +140,7 @@ class CreateServerScreen(Screen):
         container.mount(Label("Select Server Type:"))
         radio_set = RadioSet(id="server-type")
         container.mount(radio_set)
-        radio_set.mount(RadioButton("Vanilla Minecraft", id="vanilla"))
+        radio_set.mount(RadioButton("Vanilla Minecraft", id="vanilla", value=True))  # Default
         radio_set.mount(RadioButton("Forge (Modded)", id="forge"))
         radio_set.mount(RadioButton("Custom Modpack", id="modpack"))
 
