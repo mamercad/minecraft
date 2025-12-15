@@ -21,40 +21,53 @@ class ModpackInstaller(BaseMinecraftInstaller):
             raise InstallationError("Modpack URL is required for modpack installations")
 
         try:
+            # 0. Wait for cloud-init to complete
+            await self.wait_for_cloud_init(progress_callback)
+
             # 1. Install dependencies
             if progress_callback:
                 progress_callback("Installing dependencies...")
-            self.execute_command(
+            await self.execute_apt_with_retry(
                 "DEBIAN_FRONTEND=noninteractive apt-get update && "
                 "DEBIAN_FRONTEND=noninteractive apt-get install -y openjdk-21-jre-headless openjdk-21-jdk-headless unzip wget",
                 progress_callback,
             )
 
-            # 2. Create server directory
+            # 2. Create minecraft user and group
+            if progress_callback:
+                progress_callback("Creating minecraft user...")
+            await self.execute_command(
+                "useradd -r -m -d /opt/minecraft -s /bin/bash minecraft || true",
+                progress_callback,
+            )
+
+            # 3. Create server directory
             if progress_callback:
                 progress_callback("Creating server directory...")
-            self.execute_command("mkdir -p /opt/minecraft", progress_callback)
+            await self.execute_command("mkdir -p /opt/minecraft", progress_callback)
 
-            # 3. Download modpack
+            # 4. Download modpack
             if progress_callback:
                 progress_callback("Downloading modpack...")
-            self.execute_command(
+            await self.execute_command(
                 f"wget -q -O /opt/minecraft/modpack.zip '{self.config.modpack_url}'",
                 progress_callback,
             )
 
-            # 4. Extract modpack
+            # 5. Extract modpack
             if progress_callback:
                 progress_callback("Extracting modpack...")
-            self.execute_command("cd /opt/minecraft && unzip -o modpack.zip", progress_callback)
+            await self.execute_command(
+                "cd /opt/minecraft && unzip -o modpack.zip", progress_callback
+            )
 
-            # 5. Detect modpack type (look for forge installer, fabric loader, etc.)
+            # 6. Detect modpack type (look for forge installer, fabric loader, etc.)
             if progress_callback:
                 progress_callback("Detecting modpack configuration...")
 
-            # 6. Run any setup scripts included in modpack
+            # 7. Run any setup scripts included in modpack
             # Many modpacks include install.sh or similar
-            stdout, _ = self.execute_command(
+            stdout, _ = await self.execute_command(
                 "cd /opt/minecraft && ls *.sh 2>/dev/null | head -n 1 || echo 'none'",
                 progress_callback,
             )
@@ -63,16 +76,16 @@ class ModpackInstaller(BaseMinecraftInstaller):
             if install_script and install_script != "none":
                 if progress_callback:
                     progress_callback(f"Running modpack installer: {install_script}...")
-                self.execute_command(
+                await self.execute_command(
                     f"cd /opt/minecraft && chmod +x {install_script} && bash {install_script}",
                     progress_callback,
                 )
 
-            # 7. Create eula.txt
+            # 8. Create eula.txt
             if progress_callback:
                 progress_callback("Creating EULA...")
             eula_content = self.create_eula_txt()
-            self.execute_command(
+            await self.execute_command(
                 f"echo '{eula_content}' > /opt/minecraft/eula.txt", progress_callback
             )
 
@@ -80,32 +93,39 @@ class ModpackInstaller(BaseMinecraftInstaller):
             if progress_callback:
                 progress_callback("Configuring server...")
             props_content = self.escape_for_shell(self.create_server_properties())
-            self.execute_command(
+            await self.execute_command(
                 f"cat > /opt/minecraft/server.properties << 'EOF'\n{props_content}\nEOF",
                 progress_callback,
             )
 
-            # 9. Make any scripts executable
-            self.execute_command(
+            # 10. Make any scripts executable
+            await self.execute_command(
                 "cd /opt/minecraft && chmod +x *.sh 2>/dev/null || true",
                 progress_callback,
             )
 
-            # 10. Create systemd service
+            # 11. Set ownership
+            if progress_callback:
+                progress_callback("Setting permissions...")
+            await self.execute_command(
+                "chown -R minecraft:minecraft /opt/minecraft", progress_callback
+            )
+
+            # 12. Create systemd service
             if progress_callback:
                 progress_callback("Creating systemd service...")
             service_content = self._create_systemd_service()
-            self.execute_command(
+            await self.execute_command(
                 f"cat > /etc/systemd/system/minecraft.service << 'EOF'\n{service_content}\nEOF",
                 progress_callback,
             )
 
-            # 11. Start server
+            # 13. Start server
             if progress_callback:
                 progress_callback("Starting server...")
-            self.execute_command("systemctl daemon-reload", progress_callback)
-            self.execute_command("systemctl enable minecraft", progress_callback)
-            self.execute_command("systemctl start minecraft", progress_callback)
+            await self.execute_command("systemctl daemon-reload", progress_callback)
+            await self.execute_command("systemctl enable minecraft", progress_callback)
+            await self.execute_command("systemctl start minecraft", progress_callback)
 
             if progress_callback:
                 progress_callback("Installation complete!")
@@ -126,7 +146,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
+User=minecraft
+Group=minecraft
 WorkingDirectory=/opt/minecraft
 ExecStart=/bin/bash -c 'if [ -f start.sh ]; then ./start.sh; elif [ -f run.sh ]; then ./run.sh; elif [ -f ServerStart.sh ]; then ./ServerStart.sh; else java -Xmx{self.config.memory_mb}M -Xms{self.config.memory_mb}M -jar $(ls -1 forge*.jar minecraft_server*.jar server.jar 2>/dev/null | head -n1) nogui; fi'
 Restart=on-failure

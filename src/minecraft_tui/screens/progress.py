@@ -3,7 +3,7 @@
 import asyncio
 
 from textual.app import ComposeResult
-from textual.containers import Container
+from textual.containers import Container, Horizontal
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Static
 
@@ -71,7 +71,8 @@ class ProgressScreen(Screen):
             yield Static(f"Creating: {self.server_config.name}", id="title")
             yield Static("Initializing...", id="status")
             yield ProgressLog()
-            yield Button("Back to Main Menu", variant="primary", id="done-btn", disabled=True)
+            with Horizontal():
+                yield Button("Back to Main Menu", variant="primary", id="done-btn", disabled=True)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -121,8 +122,10 @@ class ProgressScreen(Screen):
             log.log_progress(f"Creating droplet: {self.server_config.name}")
 
             # Use region and size from server config if available, otherwise use defaults
-            region = getattr(self.server_config, 'region', self.app.settings.default_region)
-            droplet_size = getattr(self.server_config, 'droplet_size', self.app.settings.default_size)
+            region = getattr(self.server_config, "region", self.app.settings.default_region)
+            droplet_size = getattr(
+                self.server_config, "droplet_size", self.app.settings.default_size
+            )
 
             log.log_progress(f"Region: {region}")
             log.log_progress(f"Size: {droplet_size}")
@@ -173,7 +176,7 @@ class ProgressScreen(Screen):
 
             # Connect via SSH
             log.log_progress(f"Connecting via SSH using key: {settings.ssh_private_key_path}")
-            installer.connect_ssh(
+            await installer.connect_ssh(
                 host=self.droplet_ip,
                 username="root",
                 key_path=str(settings.ssh_private_key_path),
@@ -194,9 +197,12 @@ class ProgressScreen(Screen):
             log.log_progress("🎉 SERVER CREATED SUCCESSFULLY!")
             log.log_progress("=" * 60)
             log.log_progress(f"Server Name: {self.server_config.name}")
+            log.log_progress("")
+            log.log_progress("📋 Copy this to connect:")
+            log.log_progress(f"   {self.droplet_ip}:{self.server_config.server_port}")
+            log.log_progress("")
             log.log_progress(f"IP Address: {self.droplet_ip}")
             log.log_progress(f"Port: {self.server_config.server_port}")
-            log.log_progress(f"Connect: {self.droplet_ip}:{self.server_config.server_port}")
             log.log_progress("")
             log.log_progress(
                 "The server is starting up. It may take a few minutes before it's ready."

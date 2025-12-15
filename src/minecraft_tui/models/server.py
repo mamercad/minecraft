@@ -35,6 +35,8 @@ class ServerConfig(BaseModel):
     max_players: int = Field(default=20, ge=1, le=100)
     server_port: int = Field(default=25565)
     memory_mb: int = Field(default=3072, description="Server RAM in MB")
+    droplet_size: str = Field(default="s-2vcpu-4gb", description="DigitalOcean droplet size slug")
+    region: str = Field(default="nyc3", description="DigitalOcean region slug")
 
     # EULA acceptance
     accept_eula: bool = Field(default=False)

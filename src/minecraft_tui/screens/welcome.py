@@ -2,7 +2,7 @@
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Container
+from textual.containers import Container, Horizontal
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Input, Static
 
@@ -63,7 +63,8 @@ class WelcomeScreen(Screen):
                 password=True,
                 id="token-input",
             )
-            yield Button("Continue", variant="primary", id="continue-btn")
+            with Horizontal():
+                yield Button("Continue", variant="primary", id="continue-btn")
         yield Footer()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:

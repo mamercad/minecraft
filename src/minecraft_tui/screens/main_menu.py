@@ -93,9 +93,10 @@ class MainMenuScreen(Screen):
                 with Container(id="menu-section"):
                     yield Static("Minecraft Server Manager", id="title")
                     yield Static("Loading account info...", id="account-info")
-                    yield Button("Create New Server", variant="primary", id="create-btn")
-                    yield Button("View Servers", variant="default", id="view-btn")
-                    yield Button("Quit", variant="error", id="quit-btn")
+                    with Horizontal():
+                        yield Button("Create New Server", variant="primary", id="create-btn")
+                        yield Button("View Servers", variant="default", id="view-btn")
+                        yield Button("Quit", variant="error", id="quit-btn")
         yield Footer()
 
     def on_mount(self) -> None:

@@ -2,7 +2,7 @@
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Container
+from textual.containers import Container, Horizontal
 from textual.screen import Screen
 from textual.widgets import Button, DataTable, Footer, Header, Static
 from textual.widgets.data_table import RowKey
@@ -69,9 +69,10 @@ class ServerListScreen(Screen):
             yield Static("Minecraft Servers", id="title")
             yield Static("Loading servers... | Auto-refresh: ON", id="status")
             yield DataTable(id="server-table", cursor_type="row")
-            yield Button("Refresh", variant="default", id="refresh-btn")
-            yield Button("Auto-refresh: ON", variant="success", id="toggle-refresh-btn")
-            yield Button("Back", variant="primary", id="back-btn")
+            with Horizontal():
+                yield Button("Refresh", variant="default", id="refresh-btn")
+                yield Button("Auto-refresh: ON", variant="success", id="toggle-refresh-btn")
+                yield Button("Back", variant="primary", id="back-btn")
         yield Footer()
 
     def on_mount(self) -> None:

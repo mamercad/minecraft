@@ -7,8 +7,13 @@ A beautiful terminal user interface (TUI) for managing Minecraft servers on Digi
 - **Easy Setup**: Simple onboarding with `$DIGITALOCEAN_TOKEN` environment variable
 - **Multiple Server Types**: Support for Vanilla, Forge, and custom modpack servers
 - **Automated Deployment**: Automatically provisions DigitalOcean droplets and installs Minecraft
+- **Security Hardening**: Automatic fail2ban, UFW firewall, and SSH key-only authentication
 - **Server Management**: Start, stop, restart, and delete servers from the TUI
+- **Live Server Console**: View logs and send commands via RCON directly from the TUI
+- **Customizable Properties**: Edit server.properties in a built-in editor before deployment
 - **Real-time Progress**: Stream installation progress with live updates
+- **Vi Key Bindings**: Navigate with j/k keys for a familiar vim-like experience
+- **Minecraft Themed UI**: Creeper ASCII art on splash screen (randomized each time) and main menu
 
 ## Requirements
 
@@ -70,9 +75,34 @@ minecraft-tui
 4. **Create Your First Server**:
    - Select "Create New Server" from the main menu
    - Choose your server type (Vanilla, Forge, or Modpack)
-   - Configure server settings
-   - Accept the Minecraft EULA
+   - Configure server settings (name, max players, region, droplet size)
+   - Select your SSH key (only keys with matching private keys are shown)
+   - Edit server.properties to customize gameplay (difficulty, gamemode, pvp, etc.)
+   - Review your complete configuration including finalized server properties
+   - Accept the Minecraft EULA and create!
    - Watch as your server is created!
+
+## Key Bindings
+
+The TUI supports both standard and vi-style key bindings:
+
+**Navigation:**
+- `j` / `Down Arrow` - Move down / focus next
+- `k` / `Up Arrow` - Move up / focus previous
+- `Tab` / `Shift+Tab` - Cycle through focusable elements
+- `Enter` - Select / activate
+- `q` - Quit application
+- `d` - Toggle dark/light mode
+
+**Server List:**
+- `g` - Jump to top of list
+- `G` - Jump to bottom of list
+- Auto-refresh every 30 seconds (can be toggled off)
+
+**Radio Buttons (Server Creation Wizard):**
+- `j` - Move to next option
+- `k` - Move to previous option
+- `Space` / `Enter` - Select option
 
 ## Configuration
 
@@ -133,7 +163,8 @@ minecraft/
 │   │   └── server_detail.py
 │   └── widgets/               # Custom widgets
 │       ├── progress_log.py
-│       └── server_card.py
+│       ├── server_card.py
+│       └── vi_radio_set.py
 └── tests/                     # Unit tests
 ```
 
@@ -180,10 +211,32 @@ uv run minecraft-tui
 ## How It Works
 
 1. **Droplet Creation**: The app uses the DigitalOcean API (via `pydo`) to create a new droplet
-2. **SSH Key Upload**: Your SSH public key is automatically uploaded to DigitalOcean
-3. **Server Installation**: The app connects via SSH and runs installation scripts
-4. **Systemd Service**: A systemd service is created for automatic server management
-5. **Tag Management**: Droplets are tagged with `minecraft-tui` for easy identification
+2. **Security Hardening**: Cloud-init automatically configures fail2ban, UFW firewall, and SSH hardening
+3. **SSH Key Upload**: Your SSH public key is automatically uploaded to DigitalOcean
+4. **Server Installation**: The app connects via SSH and runs installation scripts
+5. **Systemd Service**: A systemd service is created for automatic server management
+6. **RCON Setup**: Remote console is automatically enabled with a secure password
+7. **Tag Management**: Droplets are tagged with `minecraft-tui` for easy identification
+
+## Server Console
+
+Access your server console directly from the TUI:
+
+1. Navigate to a running server in the server list
+2. Click "View Console"
+3. The TUI will:
+   - Connect to your server via SSH
+   - Retrieve the RCON password from server.properties
+   - Establish an RCON connection
+   - Display recent server logs
+4. Send commands like:
+   - `list` - Show online players
+   - `say Hello everyone!` - Broadcast message
+   - `time set day` - Change time of day
+   - `weather clear` - Clear weather
+   - `tp player1 player2` - Teleport players
+
+All standard Minecraft commands are supported through RCON.
 
 ## Troubleshooting
 
@@ -214,12 +267,25 @@ If server installation fails:
 3. For Forge servers, ensure the Forge version is compatible with the Minecraft version
 4. For modpacks, verify the URL is accessible and the zip file is valid
 
-## Security Notes
+## Security Features
+
+All servers are automatically hardened on creation:
+
+- **fail2ban Protection**: Automatically installed and configured
+  - SSH brute force protection (3 max retries, 30-minute ban)
+  - Optional Minecraft connection spam filter
+- **UFW Firewall**: Pre-configured and enabled
+  - Default deny incoming traffic
+  - Only SSH (port 22), Minecraft (port 25565), and RCON (port 25575) allowed
+- **RCON Security**: Randomly generated secure passwords for remote console access
+- **SSH Hardening**: Root password login disabled, SSH keys only
+- **Automatic Updates**: Cloud-init updates all packages on first boot
+
+Additional security practices:
 
 - **Never commit your DigitalOcean token** - use environment variables
 - **SSH keys are never logged** - your private keys stay local
 - **Tokens are stored securely** - using Pydantic's `SecretStr`
-- **Droplet firewall** - configure UFW to restrict access (optional)
 
 ## Contributing
 

@@ -11,13 +11,16 @@ class MinecraftTUI(App):
 
     CSS = """
     Screen {
-        align: center middle;
+        height: 100%;
     }
     """
 
     BINDINGS = [
         Binding("q", "quit", "Quit", priority=True),
         Binding("d", "toggle_dark", "Toggle Dark Mode"),
+        # Vi-style navigation
+        Binding("j", "focus_next", "Focus Next", show=False),
+        Binding("k", "focus_previous", "Focus Previous", show=False),
     ]
 
     def __init__(self):
@@ -27,10 +30,21 @@ class MinecraftTUI(App):
 
     def on_mount(self) -> None:
         """Initialize app on mount."""
+        from .screens.splash import SplashScreen
+
+        # Show splash screen first, then show next screen after it's dismissed
+        self.push_screen(SplashScreen(), callback=self.show_next_screen)
+
+    def show_next_screen(self, _result=None) -> None:
+        """Show the appropriate screen after splash.
+
+        Args:
+            _result: Unused result from dismissed screen
+        """
         from .screens.main_menu import MainMenuScreen
         from .screens.welcome import WelcomeScreen
 
-        # Check for DIGITALOCEAN_TOKEN
+        # Check for DIGITALOCEAN_TOKEN and push appropriate screen
         if not self.settings.digitalocean_token:
             self.push_screen(WelcomeScreen())
         else:
