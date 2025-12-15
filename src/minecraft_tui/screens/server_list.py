@@ -4,10 +4,15 @@ from textual.app import ComposeResult
 from textual.containers import Container
 from textual.screen import Screen
 from textual.widgets import Button, DataTable, Footer, Header, Static
+from textual.widgets.data_table import RowKey
 
 
 class ServerListScreen(Screen):
     """Screen showing list of all servers."""
+
+    def __init__(self):
+        super().__init__()
+        self.droplet_map: dict[RowKey, dict] = {}  # Map row keys to droplet data
 
     CSS = """
     ServerListScreen {
@@ -77,6 +82,7 @@ class ServerListScreen(Screen):
 
             # Clear existing rows
             table.clear()
+            self.droplet_map.clear()  # Clear the droplet mapping
 
             status.update("Fetching servers from DigitalOcean...")
 
@@ -109,12 +115,22 @@ class ServerListScreen(Screen):
                 if created_at != "Unknown":
                     created_at = created_at.split("T")[0]
 
-                table.add_row(name, ip_address, region, status_text, created_at)
+                # Add row and store droplet data
+                row_key = table.add_row(name, ip_address, region, status_text, created_at)
+                self.droplet_map[row_key] = droplet
 
         except Exception as e:
             status.update(f"Error loading servers: {e}")
             table.clear()
             table.add_row("Error loading servers", str(e), "-", "-", "-")
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Handle row selection in the table."""
+        if event.row_key in self.droplet_map:
+            from .server_detail import ServerDetailScreen
+
+            droplet = self.droplet_map[event.row_key]
+            self.app.push_screen(ServerDetailScreen(droplet))
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press."""
