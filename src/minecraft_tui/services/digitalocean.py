@@ -23,6 +23,29 @@ class DigitalOceanService:
             raise DigitalOceanError("DigitalOcean token is not set")
         self.client = Client(token=settings.digitalocean_token.get_secret_value())
 
+    async def get_account_info(self) -> dict:
+        """Get DigitalOcean account information.
+
+        Returns:
+            Dictionary with account info (email, droplet_limit, status, etc.)
+
+        Raises:
+            DigitalOceanError: If account info retrieval fails
+        """
+        try:
+            resp = self.client.account.get()
+            account = resp.get("account", {})
+            return {
+                "email": account.get("email", "Unknown"),
+                "uuid": account.get("uuid", "Unknown"),
+                "status": account.get("status", "Unknown"),
+                "droplet_limit": account.get("droplet_limit", 0),
+                "email_verified": account.get("email_verified", False),
+                "team": account.get("team", {}).get("name") if account.get("team") else None,
+            }
+        except Exception as e:
+            raise DigitalOceanError(f"Failed to get account info: {e}") from e
+
     async def ensure_ssh_key(self) -> int:
         """Ensure SSH key exists in DigitalOcean, upload if not.
 
