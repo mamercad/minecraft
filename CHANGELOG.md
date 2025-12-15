@@ -1,0 +1,102 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+- RCON service for remote console access to Minecraft servers with full protocol support
+- Server console screen with live command execution and log viewing
+- Comprehensive RCON error diagnostics with context-specific troubleshooting steps
+- Standalone RCON connection test utility (test_rcon.py) for independent diagnostics
+- Automatic RCON password generation and secure storage in server.properties
+- Debug logging to `/tmp/minecraft_tui_rcon_debug.log` for RCON troubleshooting
+- Detailed SSH diagnostic commands in error messages for common RCON issues
+
+### Fixed
+- RCON now binds to 0.0.0.0 (all interfaces) instead of localhost for external access
+- Server control buttons now appear on a single row instead of split across two rows
+- RCON authentication properly handles servers that send only one response packet
+- Connection timeout errors provide specific troubleshooting based on error type (connection refused vs timeout vs auth failure)
+
+## [0.1.0] - 2024-12-15
+
+### Added
+- Initial release of Minecraft TUI for DigitalOcean
+- Textual-based terminal user interface for managing Minecraft servers
+- Splash screen with ASCII art and randomized Minecraft creepers
+- Welcome screen with DigitalOcean token configuration
+- Main menu with account information display
+- Server creation wizard with 5-step process:
+  - Server type selection (Vanilla, Forge, Modpack)
+  - Version configuration
+  - Server settings (name, players, region, droplet size, SSH key, EULA)
+  - server.properties editor with editable TextArea
+  - Review screen with complete configuration preview
+- Server list screen with live DigitalOcean data and auto-refresh (30-second intervals)
+- Server detail screen with:
+  - Real-time server status display
+  - Connection information with highlighted IP address
+  - Droplet specifications (size, region, vCPUs, memory, disk)
+  - Power controls (Power On/Off, Reboot)
+  - Server deletion with confirmation dialog
+- Progress screen with real-time installation streaming
+- Automatic droplet provisioning on DigitalOcean
+- Cloud-init integration for automatic security hardening:
+  - fail2ban configuration for SSH brute-force protection (3 max retries, 30-minute ban)
+  - UFW firewall with default deny incoming policy
+  - Automatic firewall rules for SSH (22), Minecraft (25565), and RCON (25575)
+  - Disabled root password login (SSH key authentication only)
+  - UTC timezone configuration
+  - Optional Minecraft DDoS filter for fail2ban
+- Automated Minecraft server installation via SSH:
+  - Java 21 installation (OpenJDK)
+  - Automatic server JAR download from Mojang API
+  - systemd service creation for automatic server management
+  - EULA acceptance handling
+  - Configurable server.properties with parser
+- Vi-style key bindings for navigation (j/k, g/G)
+- SSH key management with automatic discovery and validation
+- Auto-generated server names with timestamp
+- Support for multiple Minecraft server types:
+  - Vanilla servers with version manifest API integration
+  - Forge servers (modded)
+  - Modpack servers
+- Idempotent SSH key operations to avoid duplicates in DigitalOcean
+
+### Fixed
+- Wrapped synchronous PyDo API calls with asyncio.to_thread for proper async handling
+- Proper screen refresh method usage in Textual
+- SSH key comparison now parses key components (type and data) correctly, ignoring comments
+- Dark mode attribute initialization in app
+- APT lock handling with exponential backoff retry logic (10 retries max)
+
+### Security
+- Cloud-init automatically configures fail2ban for SSH protection
+- UFW firewall with restrictive default deny incoming policy
+- Root password login disabled, SSH key authentication enforced
+- RCON password generated using secrets.token_urlsafe(16) for cryptographic security
+
+### Changed
+- Default server type changed to Vanilla
+- Server list refresh interval set to 30 seconds (toggleable)
+- Droplet tags now include 'minecraft-tui' and 'minecraft-server' for filtering
+
+## [0.0.0] - 2024-12-14
+
+### Added
+- Project initialization
+- Basic project structure with pyproject.toml
+- Development dependencies (pytest, ruff, textual-dev)
+- Test suite configuration with pytest-asyncio
+- Pydantic models for server configuration
+- DigitalOcean service wrapper for PyDo client
+
+---
+
+[unreleased]: https://github.com/mamercad/minecraft/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/mamercad/minecraft/compare/v0.0.0...v0.1.0
+[0.0.0]: https://github.com/mamercad/minecraft/releases/tag/v0.0.0
