@@ -55,9 +55,10 @@ class ProgressScreen(Screen):
     }
     """
 
-    def __init__(self, server_config: ServerConfig):
+    def __init__(self, server_config: ServerConfig, ssh_key_path: str):
         super().__init__()
         self.server_config = server_config
+        self.ssh_key_path = ssh_key_path
         self.droplet_id = None
         self.droplet_ip = None
         self.creation_complete = False
@@ -86,8 +87,23 @@ class ProgressScreen(Screen):
             # 1. Initialize DigitalOcean service
             status.update("Connecting to DigitalOcean...")
             log.log_progress("Initializing DigitalOcean service...")
+            log.log_progress(f"Using SSH key: {self.ssh_key_path}")
 
-            do_service = DigitalOceanService(self.app.settings)
+            # Update settings to use user-provided SSH key
+            from pathlib import Path
+
+            from ..config import Settings
+
+            settings = Settings()
+            settings.digitalocean_token = self.app.settings.digitalocean_token
+            settings.ssh_key_path = Path(self.ssh_key_path)
+            # Derive private key path from public key path
+            if self.ssh_key_path.endswith(".pub"):
+                settings.ssh_private_key_path = Path(self.ssh_key_path[:-4])
+            else:
+                settings.ssh_private_key_path = Path(self.ssh_key_path)
+
+            do_service = DigitalOceanService(settings)
 
             # 2. Create droplet
             status.update("Creating droplet...")
@@ -133,10 +149,11 @@ class ProgressScreen(Screen):
                 installer = ModpackInstaller(self.server_config)
 
             # Connect via SSH
+            log.log_progress(f"Connecting via SSH using key: {settings.ssh_private_key_path}")
             installer.connect_ssh(
                 host=self.droplet_ip,
                 username="root",
-                key_path=str(self.app.settings.ssh_private_key_path),
+                key_path=str(settings.ssh_private_key_path),
             )
 
             # Run installation with progress callback

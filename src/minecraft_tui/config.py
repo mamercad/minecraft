@@ -16,9 +16,7 @@ class Settings(BaseSettings):
     )
 
     # DigitalOcean settings
-    digitalocean_token: SecretStr | None = Field(
-        default=None, description="DigitalOcean API token"
-    )
+    digitalocean_token: SecretStr | None = Field(default=None, description="DigitalOcean API token")
 
     # Default droplet settings
     default_region: str = Field(default="nyc3", description="Default DigitalOcean region")

@@ -72,6 +72,12 @@ class CreateServerScreen(Screen):
         super().__init__()
         self.current_step = 1
         self.max_steps = 4
+
+        # Detect default SSH key
+        from ..utils.ssh_helper import get_default_ssh_key_path
+
+        default_ssh_key = get_default_ssh_key_path()
+
         self.server_data = {
             "server_type": None,
             "minecraft_version": "1.20.1",
@@ -81,6 +87,7 @@ class CreateServerScreen(Screen):
             "max_players": 20,
             "memory_mb": 3072,
             "accept_eula": False,
+            "ssh_key_path": default_ssh_key,
         }
 
     def compose(self) -> ComposeResult:
@@ -192,6 +199,15 @@ class CreateServerScreen(Screen):
             )
         )
 
+        container.mount(Label("SSH Public Key Path:"))
+        container.mount(
+            Input(
+                value=self.server_data.get("ssh_key_path", ""),
+                placeholder="~/.ssh/id_ed25519.pub or ~/.ssh/id_rsa.pub",
+                id="ssh-key-path",
+            )
+        )
+
         container.mount(Checkbox("I accept the Minecraft EULA", id="eula-checkbox"))
 
     def show_step_4(self, container: Container):
@@ -206,6 +222,7 @@ class CreateServerScreen(Screen):
         container.mount(Static(f"Server Name: {self.server_data['name']}"))
         container.mount(Static(f"Max Players: {self.server_data['max_players']}"))
         container.mount(Static(f"Memory: {self.server_data['memory_mb']} MB"))
+        container.mount(Static(f"SSH Key: {self.server_data['ssh_key_path']}"))
         container.mount(Static(f"EULA Accepted: {self.server_data['accept_eula']}"))
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -251,9 +268,11 @@ class CreateServerScreen(Screen):
             server_name = self.query_one("#server-name", Input)
             max_players = self.query_one("#max-players", Input)
             memory = self.query_one("#memory", Input)
+            ssh_key_path = self.query_one("#ssh-key-path", Input)
             eula = self.query_one("#eula-checkbox", Checkbox)
 
             self.server_data["name"] = server_name.value
+            self.server_data["ssh_key_path"] = ssh_key_path.value
             try:
                 self.server_data["max_players"] = int(max_players.value)
                 self.server_data["memory_mb"] = int(memory.value)
@@ -282,4 +301,4 @@ class CreateServerScreen(Screen):
         # Push progress screen to show server creation
         from .progress import ProgressScreen
 
-        self.app.push_screen(ProgressScreen(config))
+        self.app.push_screen(ProgressScreen(config, ssh_key_path=self.server_data["ssh_key_path"]))

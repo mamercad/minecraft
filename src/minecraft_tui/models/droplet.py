@@ -1,6 +1,5 @@
 """DigitalOcean droplet data models."""
 
-
 from pydantic import BaseModel, Field
 
 
