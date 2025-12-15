@@ -136,8 +136,9 @@ class ServerDetailScreen(Screen):
             # Update droplet data
             self.droplet = updated_droplet
 
-            # Refresh the screen
-            await self.recompose()
+            # Refresh the screen by popping and pushing a new instance
+            self.app.pop_screen()
+            self.app.push_screen(ServerDetailScreen(updated_droplet))
 
         except Exception as e:
             self.app.notify(f"Error refreshing server: {e}", severity="error")
