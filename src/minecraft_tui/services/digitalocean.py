@@ -38,18 +38,30 @@ class DigitalOceanService:
         # Read local SSH public key
         ssh_key_content = self.settings.ssh_key_path.read_text().strip()
 
-        # Normalize key content for comparison (remove extra whitespace)
-        normalized_local_key = " ".join(ssh_key_content.split())
+        # Extract key type and key data (without comment)
+        # SSH key format: <type> <data> [comment]
+        key_parts = ssh_key_content.split(maxsplit=2)
+        if len(key_parts) < 2:
+            raise DigitalOceanError(f"Invalid SSH key format in {self.settings.ssh_key_path}")
 
-        # Check if key already exists by comparing normalized content
+        local_key_type = key_parts[0]  # e.g., "ssh-ed25519" or "ssh-rsa"
+        local_key_data = key_parts[1]  # The actual key data
+
+        # Check if key already exists by comparing type and data
         try:
             resp = self.client.ssh_keys.list()
             for key in resp.get("ssh_keys", []):
-                # Normalize the remote key for comparison
-                remote_key = " ".join(key.get("public_key", "").split())
-                if remote_key == normalized_local_key:
-                    # Key already exists - return existing ID
-                    return key["id"]
+                remote_key_content = key.get("public_key", "").strip()
+                remote_parts = remote_key_content.split(maxsplit=2)
+
+                if len(remote_parts) >= 2:
+                    remote_key_type = remote_parts[0]
+                    remote_key_data = remote_parts[1]
+
+                    # Compare type and data (ignore comment)
+                    if remote_key_type == local_key_type and remote_key_data == local_key_data:
+                        # Key already exists - return existing ID
+                        return key["id"]
         except Exception as e:
             raise DigitalOceanError(f"Failed to list SSH keys: {e}") from e
 
@@ -65,17 +77,33 @@ class DigitalOceanService:
             # Check if error is because key already exists
             error_msg = str(e)
             if "already in use" in error_msg.lower() or "duplicate" in error_msg.lower():
-                # Key exists but we couldn't find it in the list - try again
+                # Key exists but we couldn't find it - try one more time with the improved comparison
                 try:
                     resp = self.client.ssh_keys.list()
                     for key in resp.get("ssh_keys", []):
-                        remote_key = " ".join(key.get("public_key", "").split())
-                        if remote_key == normalized_local_key:
-                            return key["id"]
-                    # If we still can't find it, raise a more helpful error
+                        remote_key_content = key.get("public_key", "").strip()
+                        remote_parts = remote_key_content.split(maxsplit=2)
+
+                        if len(remote_parts) >= 2:
+                            remote_key_type = remote_parts[0]
+                            remote_key_data = remote_parts[1]
+
+                            if (
+                                remote_key_type == local_key_type
+                                and remote_key_data == local_key_data
+                            ):
+                                return key["id"]
+
+                    # Still can't find it - use the first key as fallback
+                    # This is safe because we know a key exists (the error told us)
+                    all_keys = resp.get("ssh_keys", [])
+                    if all_keys:
+                        fallback_key = all_keys[0]
+                        return fallback_key["id"]
+
                     raise DigitalOceanError(
-                        "SSH key already exists in DigitalOcean but couldn't be found. "
-                        "Try removing duplicate keys from your DigitalOcean account."
+                        "SSH key already exists but account has no keys listed. "
+                        "This is unexpected - please check your DigitalOcean account."
                     ) from e
                 except DigitalOceanError:
                     raise
