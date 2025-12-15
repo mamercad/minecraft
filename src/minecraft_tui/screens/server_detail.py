@@ -160,12 +160,19 @@ class ServerDetailScreen(Screen):
             # Server information
             with Container(classes="info-section"):
                 yield Static("[bold]Connection Info:[/]", classes="info-item")
-                yield Static(f"IP Address: {self.ip_address}", classes="info-item")
-                yield Static("Port: 25565 (default)", classes="info-item")
                 if self.ip_address != "Pending...":
+                    # Highlight IP for easy copying
                     yield Static(
-                        f"[dim]Connect with: {self.ip_address}:25565[/]", classes="info-item"
+                        f"[bold reverse] {self.ip_address} [/]",
+                        classes="info-item",
                     )
+                    yield Static(
+                        f"[dim]Connect with:[/] [bold]{self.ip_address}:25565[/]",
+                        classes="info-item",
+                    )
+                else:
+                    yield Static(f"IP Address: {self.ip_address}", classes="info-item")
+                yield Static("Port: 25565 (default)", classes="info-item")
 
             # Droplet details
             with Container(classes="info-section"):
@@ -186,16 +193,16 @@ class ServerDetailScreen(Screen):
 
             # Control buttons
             yield Static("[bold]Server Controls:[/]", classes="info-item")
-            if status == "active":
-                yield Button("View Console", variant="success", id="console-btn")
-                yield Button("Power Off", variant="warning", id="poweroff-btn")
-                yield Button("Reboot", variant="default", id="reboot-btn")
-            else:
-                yield Button("Power On", variant="success", id="poweron-btn")
-
-            yield Button("Delete Server", variant="error", id="delete-btn")
-            yield Button("Refresh", variant="default", id="refresh-btn")
-            yield Button("Back", variant="primary", id="back-btn")
+            with Horizontal():
+                if status == "active":
+                    yield Button("View Console", variant="success", id="console-btn")
+                    yield Button("Power Off", variant="warning", id="poweroff-btn")
+                    yield Button("Reboot", variant="default", id="reboot-btn")
+                else:
+                    yield Button("Power On", variant="success", id="poweron-btn")
+                yield Button("Delete Server", variant="error", id="delete-btn")
+                yield Button("Refresh", variant="default", id="refresh-btn")
+                yield Button("Back", variant="primary", id="back-btn")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -227,7 +234,9 @@ class ServerDetailScreen(Screen):
             # Refresh the display by updating widgets
             status = updated_droplet.get("status", "unknown")
             status_color = "green" if status == "active" else "yellow" if status == "new" else "red"
-            self.query_one("#status-display", Static).update(f"Status: [{status_color}]{status.upper()}[/]")
+            self.query_one("#status-display", Static).update(
+                f"Status: [{status_color}]{status.upper()}[/]"
+            )
 
             self.app.notify("Server status refreshed", severity="information")
 
