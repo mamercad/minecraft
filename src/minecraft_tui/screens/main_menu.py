@@ -1,7 +1,8 @@
 """Main menu screen."""
 
 from textual.app import ComposeResult
-from textual.containers import Container
+from textual.binding import Binding
+from textual.containers import Container, Horizontal
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Static
 
@@ -9,17 +10,42 @@ from textual.widgets import Button, Footer, Header, Static
 class MainMenuScreen(Screen):
     """Main menu screen."""
 
+    BINDINGS = [
+        # Vi-style navigation
+        Binding("j", "focus_next", "Focus Next", show=False),
+        Binding("k", "focus_previous", "Focus Previous", show=False),
+    ]
+
     CSS = """
     MainMenuScreen {
-        align: center middle;
+        height: 100%;
     }
 
     #menu-container {
-        width: 70;
-        height: auto;
+        width: 100%;
+        height: 100%;
         border: solid $accent;
         padding: 2;
         background: $surface;
+    }
+
+    #content-layout {
+        width: 100%;
+        height: 100%;
+    }
+
+    #creeper-art {
+        width: auto;
+        height: auto;
+        color: $success;
+        text-style: bold;
+        padding: 2 4;
+        margin-right: 2;
+    }
+
+    #menu-section {
+        width: 1fr;
+        height: auto;
     }
 
     #title {
@@ -39,20 +65,37 @@ class MainMenuScreen(Screen):
     }
 
     Button {
-        width: 100%;
         margin: 1 0;
     }
     """
 
     def compose(self) -> ComposeResult:
         """Compose the main menu."""
+        # Minecraft Creeper ASCII art
+        creeper = """
+    ████████████████
+    ████████████████
+    ██          ██
+    ██  ████  ████
+    ██  ████  ████
+    ██          ██
+    ████████████████
+    ██  ████████  ██
+    ██  ██    ██  ██
+    ██████    ██████
+    ████████████████
+        """
+
         yield Header()
-        with Container(id="menu-container"):
-            yield Static("Minecraft Server Manager", id="title")
-            yield Static("Loading account info...", id="account-info")
-            yield Button("Create New Server", variant="primary", id="create-btn")
-            yield Button("View Servers", variant="default", id="view-btn")
-            yield Button("Quit", variant="error", id="quit-btn")
+        with Container(id="menu-container"):  # noqa: SIM117
+            with Horizontal(id="content-layout"):
+                yield Static(creeper, id="creeper-art")
+                with Container(id="menu-section"):
+                    yield Static("Minecraft Server Manager", id="title")
+                    yield Static("Loading account info...", id="account-info")
+                    yield Button("Create New Server", variant="primary", id="create-btn")
+                    yield Button("View Servers", variant="default", id="view-btn")
+                    yield Button("Quit", variant="error", id="quit-btn")
         yield Footer()
 
     def on_mount(self) -> None:

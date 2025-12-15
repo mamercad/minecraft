@@ -1,6 +1,7 @@
 """Welcome screen for initial setup."""
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Container
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Input, Static
@@ -9,14 +10,20 @@ from textual.widgets import Button, Footer, Header, Input, Static
 class WelcomeScreen(Screen):
     """Welcome screen for initial setup."""
 
+    BINDINGS = [
+        # Vi-style navigation
+        Binding("j", "focus_next", "Focus Next", show=False),
+        Binding("k", "focus_previous", "Focus Previous", show=False),
+    ]
+
     CSS = """
     WelcomeScreen {
-        align: center middle;
+        height: 100%;
     }
 
     #welcome-container {
-        width: 70;
-        height: auto;
+        width: 100%;
+        height: 100%;
         border: solid green;
         padding: 2;
         background: $surface;
@@ -38,7 +45,6 @@ class WelcomeScreen(Screen):
     }
 
     Button {
-        width: 100%;
         margin-top: 1;
     }
     """

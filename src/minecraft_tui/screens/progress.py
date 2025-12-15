@@ -12,6 +12,7 @@ from ..services.digitalocean import DigitalOceanService
 from ..services.minecraft.forge import ForgeInstaller
 from ..services.minecraft.modpack import ModpackInstaller
 from ..services.minecraft.vanilla import VanillaInstaller
+from ..utils.cloud_init import generate_cloud_init_config
 from ..widgets.progress_log import ProgressLog
 
 
@@ -20,12 +21,12 @@ class ProgressScreen(Screen):
 
     CSS = """
     ProgressScreen {
-        align: center middle;
+        height: 100%;
     }
 
     #progress-container {
-        width: 90;
-        height: auto;
+        width: 100%;
+        height: 100%;
         border: solid $accent;
         padding: 2;
         background: $surface;
@@ -45,12 +46,11 @@ class ProgressScreen(Screen):
     }
 
     ProgressLog {
-        height: 25;
+        height: 1fr;
         margin: 1 0;
     }
 
     Button {
-        width: 100%;
         margin-top: 1;
     }
     """
@@ -97,23 +97,43 @@ class ProgressScreen(Screen):
             settings = Settings()
             settings.digitalocean_token = self.app.settings.digitalocean_token
             settings.ssh_key_path = Path(self.ssh_key_path)
+
             # Derive private key path from public key path
             if self.ssh_key_path.endswith(".pub"):
-                settings.ssh_private_key_path = Path(self.ssh_key_path[:-4])
+                private_key_path = Path(self.ssh_key_path[:-4])
             else:
-                settings.ssh_private_key_path = Path(self.ssh_key_path)
+                private_key_path = Path(self.ssh_key_path)
+
+            # Verify private key exists
+            if not private_key_path.exists():
+                raise FileNotFoundError(
+                    f"Private key not found at {private_key_path}. "
+                    f"Expected to find private key for public key: {self.ssh_key_path}"
+                )
+
+            settings.ssh_private_key_path = private_key_path
 
             do_service = DigitalOceanService(settings)
             log.log_progress("✓ SSH key verified/uploaded successfully")
 
-            # 2. Create droplet
+            # 2. Create droplet with cloud-init security configuration
             status.update("Creating droplet...")
             log.log_progress(f"Creating droplet: {self.server_config.name}")
-            log.log_progress(f"Region: {self.app.settings.default_region}")
-            log.log_progress(f"Size: {self.app.settings.default_size}")
 
+            # Use region and size from server config if available, otherwise use defaults
+            region = getattr(self.server_config, 'region', self.app.settings.default_region)
+            droplet_size = getattr(self.server_config, 'droplet_size', self.app.settings.default_size)
+
+            log.log_progress(f"Region: {region}")
+            log.log_progress(f"Size: {droplet_size}")
+            log.log_progress("Configuring automatic security hardening (fail2ban, UFW)...")
+
+            cloud_init = generate_cloud_init_config()
             droplet = await do_service.create_droplet(
                 name=self.server_config.name,
+                size=droplet_size,
+                region=region,
+                user_data=cloud_init,
             )
             self.droplet_id = droplet["id"]
             log.log_progress(f"Droplet created with ID: {self.droplet_id}")
@@ -132,10 +152,12 @@ class ProgressScreen(Screen):
 
             log.log_progress(f"Droplet is active! IP: {self.droplet_ip}")
 
-            # 4. Wait for SSH to be ready
+            # 4. Wait for SSH to be ready and cloud-init to complete
             status.update("Waiting for SSH to be ready...")
-            log.log_progress("Waiting for SSH service to start (30 seconds)...")
-            await asyncio.sleep(30)  # Give SSH time to start
+            log.log_progress("Waiting for SSH service to start...")
+            log.log_progress("Cloud-init is configuring security (fail2ban, firewall)...")
+            log.log_progress("This may take 1-2 minutes...")
+            await asyncio.sleep(60)  # Give SSH and cloud-init time to complete
 
             # 5. Install Minecraft
             status.update("Installing Minecraft server...")

@@ -1,6 +1,7 @@
 """Server detail screen."""
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Container, Horizontal
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, Footer, Header, Label, Static
@@ -9,13 +10,20 @@ from textual.widgets import Button, Footer, Header, Label, Static
 class ConfirmDeleteModal(ModalScreen):
     """Modal dialog to confirm server deletion."""
 
+    BINDINGS = [
+        # Vi-style navigation
+        Binding("j", "focus_next", "Focus Next", show=False),
+        Binding("k", "focus_previous", "Focus Previous", show=False),
+    ]
+
     CSS = """
     ConfirmDeleteModal {
         align: center middle;
     }
 
     #dialog {
-        width: 60;
+        width: 60%;
+        max-width: 80;
         height: auto;
         border: thick $error;
         background: $surface;
@@ -24,8 +32,14 @@ class ConfirmDeleteModal(ModalScreen):
 
     #question {
         text-align: center;
-        margin-bottom: 2;
+        margin-bottom: 1;
         color: $error;
+    }
+
+    #warning {
+        text-align: center;
+        margin-bottom: 2;
+        color: $warning;
     }
 
     #buttons {
@@ -51,7 +65,7 @@ class ConfirmDeleteModal(ModalScreen):
             )
             yield Label(
                 "This will permanently destroy the droplet and all data.",
-                id="question",
+                id="warning",
             )
             with Horizontal(id="buttons"):
                 yield Button("Cancel", variant="default", id="cancel")
@@ -68,17 +82,25 @@ class ConfirmDeleteModal(ModalScreen):
 class ServerDetailScreen(Screen):
     """Screen showing details of a specific server."""
 
+    BINDINGS = [
+        # Vi-style navigation
+        Binding("j", "focus_next", "Focus Next", show=False),
+        Binding("k", "focus_previous", "Focus Previous", show=False),
+        Binding("escape", "back", "Back", priority=True),
+    ]
+
     CSS = """
     ServerDetailScreen {
-        align: center middle;
+        height: 100%;
     }
 
     #detail-container {
-        width: 80;
-        height: auto;
+        width: 100%;
+        height: 100%;
         border: solid $accent;
         padding: 2;
         background: $surface;
+        overflow-y: auto;
     }
 
     #title {
@@ -107,7 +129,6 @@ class ServerDetailScreen(Screen):
     }
 
     Button {
-        width: 100%;
         margin: 1 0;
     }
     """
@@ -150,22 +171,23 @@ class ServerDetailScreen(Screen):
             with Container(classes="info-section"):
                 yield Static("[bold]Droplet Details:[/]", classes="info-item")
                 yield Static(
-                    f"Region: {self.droplet.get('region', {}).get('slug', 'Unknown')}",
-                    classes="info-item",
-                )
-                yield Static(
                     f"Size: {self.droplet.get('size', {}).get('slug', 'Unknown')}",
                     classes="info-item",
                 )
                 yield Static(
-                    f"Memory: {self.droplet.get('memory', 'Unknown')} MB", classes="info-item"
+                    f"Region: {self.droplet.get('region', {}).get('slug', 'Unknown')}",
+                    classes="info-item",
                 )
                 yield Static(f"vCPUs: {self.droplet.get('vcpus', 'Unknown')}", classes="info-item")
+                yield Static(
+                    f"Memory: {self.droplet.get('memory', 'Unknown')} MB", classes="info-item"
+                )
                 yield Static(f"Disk: {self.droplet.get('disk', 'Unknown')} GB", classes="info-item")
 
             # Control buttons
             yield Static("[bold]Server Controls:[/]", classes="info-item")
             if status == "active":
+                yield Button("View Console", variant="success", id="console-btn")
                 yield Button("Power Off", variant="warning", id="poweroff-btn")
                 yield Button("Reboot", variant="default", id="reboot-btn")
             else:
@@ -195,19 +217,35 @@ class ServerDetailScreen(Screen):
             # Update droplet data
             self.droplet = updated_droplet
 
-            # Refresh the screen by popping and pushing a new instance
-            self.app.pop_screen()
-            self.app.push_screen(ServerDetailScreen(updated_droplet))
+            # Update IP address
+            self.ip_address = "Pending..."
+            for network in updated_droplet.get("networks", {}).get("v4", []):
+                if network.get("type") == "public":
+                    self.ip_address = network.get("ip_address", "Pending...")
+                    break
+
+            # Refresh the display by updating widgets
+            status = updated_droplet.get("status", "unknown")
+            status_color = "green" if status == "active" else "yellow" if status == "new" else "red"
+            self.query_one("#status-display", Static).update(f"Status: [{status_color}]{status.upper()}[/]")
+
+            self.app.notify("Server status refreshed", severity="information")
 
         except Exception as e:
             self.app.notify(f"Error refreshing server: {e}", severity="error")
 
+    def action_back(self) -> None:
+        """Handle back action (Escape key)."""
+        self.app.pop_screen()
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press."""
         if event.button.id == "back-btn":
-            self.app.pop_screen()
+            self.action_back()
         elif event.button.id == "refresh-btn":
             self.refresh_server()
+        elif event.button.id == "console-btn":
+            self.open_console()
         elif event.button.id == "poweron-btn":
             self.run_worker(self.power_on())
         elif event.button.id == "poweroff-btn":
@@ -216,6 +254,38 @@ class ServerDetailScreen(Screen):
             self.run_worker(self.reboot())
         elif event.button.id == "delete-btn":
             self.confirm_delete()
+
+    def open_console(self) -> None:
+        """Open server console screen."""
+        from pathlib import Path
+
+        from .server_console import ServerConsoleScreen
+
+        # Try to find a valid SSH private key
+        ssh_private_key = None
+
+        # First, check if the default key exists
+        default_key = self.app.settings.ssh_private_key_path
+        if default_key and Path(default_key).exists():
+            ssh_private_key = str(default_key)
+        else:
+            # Fall back to discovering available keys
+            ssh_dir = Path.home() / ".ssh"
+            if ssh_dir.exists():
+                for pub_key in sorted(ssh_dir.glob("*.pub")):
+                    private_key = pub_key.parent / pub_key.stem
+                    if private_key.exists():
+                        ssh_private_key = str(private_key)
+                        break
+
+        if not ssh_private_key:
+            self.app.notify(
+                "No valid SSH key found. Please configure SSH_PRIVATE_KEY_PATH in settings.",
+                severity="error",
+            )
+            return
+
+        self.app.push_screen(ServerConsoleScreen(self.droplet, ssh_private_key))
 
     async def power_on(self) -> None:
         """Power on the server."""
