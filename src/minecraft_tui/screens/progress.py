@@ -104,6 +104,7 @@ class ProgressScreen(Screen):
                 settings.ssh_private_key_path = Path(self.ssh_key_path)
 
             do_service = DigitalOceanService(settings)
+            log.log_progress("✓ SSH key verified/uploaded successfully")
 
             # 2. Create droplet
             status.update("Creating droplet...")

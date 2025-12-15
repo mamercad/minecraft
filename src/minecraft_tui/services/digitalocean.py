@@ -38,11 +38,17 @@ class DigitalOceanService:
         # Read local SSH public key
         ssh_key_content = self.settings.ssh_key_path.read_text().strip()
 
-        # Check if key already exists
+        # Normalize key content for comparison (remove extra whitespace)
+        normalized_local_key = " ".join(ssh_key_content.split())
+
+        # Check if key already exists by comparing normalized content
         try:
             resp = self.client.ssh_keys.list()
             for key in resp.get("ssh_keys", []):
-                if key["public_key"] == ssh_key_content:
+                # Normalize the remote key for comparison
+                remote_key = " ".join(key.get("public_key", "").split())
+                if remote_key == normalized_local_key:
+                    # Key already exists - return existing ID
                     return key["id"]
         except Exception as e:
             raise DigitalOceanError(f"Failed to list SSH keys: {e}") from e
@@ -56,6 +62,27 @@ class DigitalOceanService:
             resp = self.client.ssh_keys.create(body=req)
             return resp["ssh_key"]["id"]
         except Exception as e:
+            # Check if error is because key already exists
+            error_msg = str(e)
+            if "already in use" in error_msg.lower() or "duplicate" in error_msg.lower():
+                # Key exists but we couldn't find it in the list - try again
+                try:
+                    resp = self.client.ssh_keys.list()
+                    for key in resp.get("ssh_keys", []):
+                        remote_key = " ".join(key.get("public_key", "").split())
+                        if remote_key == normalized_local_key:
+                            return key["id"]
+                    # If we still can't find it, raise a more helpful error
+                    raise DigitalOceanError(
+                        "SSH key already exists in DigitalOcean but couldn't be found. "
+                        "Try removing duplicate keys from your DigitalOcean account."
+                    ) from e
+                except DigitalOceanError:
+                    raise
+                except Exception as list_error:
+                    raise DigitalOceanError(
+                        f"SSH key exists but couldn't verify: {list_error}"
+                    ) from list_error
             raise DigitalOceanError(f"Failed to create SSH key: {e}") from e
 
     async def create_droplet(
