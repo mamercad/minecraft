@@ -33,7 +33,8 @@ class DigitalOceanService:
             DigitalOceanError: If account info retrieval fails
         """
         try:
-            resp = self.client.account.get()
+            # Run synchronous API call in thread pool
+            resp = await asyncio.to_thread(self.client.account.get)
             account = resp.get("account", {})
             return {
                 "email": account.get("email", "Unknown"),
@@ -72,7 +73,7 @@ class DigitalOceanService:
 
         # Check if key already exists by comparing type and data
         try:
-            resp = self.client.ssh_keys.list()
+            resp = await asyncio.to_thread(self.client.ssh_keys.list)
             for key in resp.get("ssh_keys", []):
                 remote_key_content = key.get("public_key", "").strip()
                 remote_parts = remote_key_content.split(maxsplit=2)
@@ -94,7 +95,7 @@ class DigitalOceanService:
                 "public_key": ssh_key_content,
                 "name": f"minecraft-tui-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
             }
-            resp = self.client.ssh_keys.create(body=req)
+            resp = await asyncio.to_thread(self.client.ssh_keys.create, body=req)
             return resp["ssh_key"]["id"]
         except Exception as e:
             # Check if error is because key already exists
@@ -102,7 +103,7 @@ class DigitalOceanService:
             if "already in use" in error_msg.lower() or "duplicate" in error_msg.lower():
                 # Key exists but we couldn't find it - try one more time with the improved comparison
                 try:
-                    resp = self.client.ssh_keys.list()
+                    resp = await asyncio.to_thread(self.client.ssh_keys.list)
                     for key in resp.get("ssh_keys", []):
                         remote_key_content = key.get("public_key", "").strip()
                         remote_parts = remote_key_content.split(maxsplit=2)
@@ -178,7 +179,7 @@ class DigitalOceanService:
             req["user_data"] = user_data
 
         try:
-            resp = self.client.droplets.create(body=req)
+            resp = await asyncio.to_thread(self.client.droplets.create, body=req)
             return resp["droplet"]
         except Exception as e:
             raise DigitalOceanError(f"Failed to create droplet: {e}") from e
@@ -203,7 +204,7 @@ class DigitalOceanService:
         elapsed = 0
         while elapsed < timeout:
             try:
-                resp = self.client.droplets.get(droplet_id)
+                resp = await asyncio.to_thread(self.client.droplets.get, droplet_id)
                 droplet = resp["droplet"]
 
                 if droplet["status"] == "active":
@@ -229,7 +230,7 @@ class DigitalOceanService:
             DigitalOceanError: If listing fails
         """
         try:
-            resp = self.client.droplets.list(tag_name=tag)
+            resp = await asyncio.to_thread(self.client.droplets.list, tag_name=tag)
             return resp.get("droplets", [])
         except Exception as e:
             raise DigitalOceanError(f"Failed to list droplets: {e}") from e
@@ -247,7 +248,7 @@ class DigitalOceanService:
             DigitalOceanError: If retrieval fails
         """
         try:
-            resp = self.client.droplets.get(droplet_id)
+            resp = await asyncio.to_thread(self.client.droplets.get, droplet_id)
             return resp["droplet"]
         except Exception as e:
             raise DigitalOceanError(f"Failed to get droplet {droplet_id}: {e}") from e
@@ -262,7 +263,7 @@ class DigitalOceanService:
             DigitalOceanError: If deletion fails
         """
         try:
-            self.client.droplets.destroy(droplet_id)
+            await asyncio.to_thread(self.client.droplets.destroy, droplet_id)
         except Exception as e:
             raise DigitalOceanError(f"Failed to delete droplet {droplet_id}: {e}") from e
 
@@ -277,7 +278,7 @@ class DigitalOceanService:
         """
         try:
             req = {"type": "power_on"}
-            self.client.droplet_actions.post(droplet_id, body=req)
+            await asyncio.to_thread(self.client.droplet_actions.post, droplet_id, body=req)
         except Exception as e:
             raise DigitalOceanError(f"Failed to power on droplet {droplet_id}: {e}") from e
 
@@ -292,7 +293,7 @@ class DigitalOceanService:
         """
         try:
             req = {"type": "power_off"}
-            self.client.droplet_actions.post(droplet_id, body=req)
+            await asyncio.to_thread(self.client.droplet_actions.post, droplet_id, body=req)
         except Exception as e:
             raise DigitalOceanError(f"Failed to power off droplet {droplet_id}: {e}") from e
 
@@ -307,6 +308,6 @@ class DigitalOceanService:
         """
         try:
             req = {"type": "reboot"}
-            self.client.droplet_actions.post(droplet_id, body=req)
+            await asyncio.to_thread(self.client.droplet_actions.post, droplet_id, body=req)
         except Exception as e:
             raise DigitalOceanError(f"Failed to reboot droplet {droplet_id}: {e}") from e
