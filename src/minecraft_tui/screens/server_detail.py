@@ -1,9 +1,68 @@
 """Server detail screen."""
 
 from textual.app import ComposeResult
-from textual.containers import Container
-from textual.screen import Screen
-from textual.widgets import Button, Footer, Header, Static
+from textual.containers import Container, Horizontal
+from textual.screen import ModalScreen, Screen
+from textual.widgets import Button, Footer, Header, Label, Static
+
+
+class ConfirmDeleteModal(ModalScreen):
+    """Modal dialog to confirm server deletion."""
+
+    CSS = """
+    ConfirmDeleteModal {
+        align: center middle;
+    }
+
+    #dialog {
+        width: 60;
+        height: auto;
+        border: thick $error;
+        background: $surface;
+        padding: 2;
+    }
+
+    #question {
+        text-align: center;
+        margin-bottom: 2;
+        color: $error;
+    }
+
+    #buttons {
+        height: auto;
+        align: center middle;
+    }
+
+    Button {
+        margin: 0 1;
+    }
+    """
+
+    def __init__(self, server_name: str):
+        super().__init__()
+        self.server_name = server_name
+
+    def compose(self) -> ComposeResult:
+        """Compose the confirmation dialog."""
+        with Container(id="dialog"):
+            yield Label(
+                f"Are you sure you want to delete server '{self.server_name}'?",
+                id="question",
+            )
+            yield Label(
+                "This will permanently destroy the droplet and all data.",
+                id="question",
+            )
+            with Horizontal(id="buttons"):
+                yield Button("Cancel", variant="default", id="cancel")
+                yield Button("Delete", variant="error", id="confirm")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press."""
+        if event.button.id == "confirm":
+            self.dismiss(True)
+        else:
+            self.dismiss(False)
 
 
 class ServerDetailScreen(Screen):
@@ -156,7 +215,7 @@ class ServerDetailScreen(Screen):
         elif event.button.id == "reboot-btn":
             self.run_worker(self.reboot())
         elif event.button.id == "delete-btn":
-            self.run_worker(self.delete_server())
+            self.confirm_delete()
 
     async def power_on(self) -> None:
         """Power on the server."""
@@ -214,6 +273,16 @@ class ServerDetailScreen(Screen):
 
         except Exception as e:
             self.app.notify(f"Error rebooting server: {e}", severity="error")
+
+    def confirm_delete(self) -> None:
+        """Show confirmation dialog before deleting."""
+
+        async def handle_delete_confirmation(confirmed: bool) -> None:
+            """Handle the result of the delete confirmation."""
+            if confirmed:
+                await self.delete_server()
+
+        self.app.push_screen(ConfirmDeleteModal(self.server_name), handle_delete_confirmation)
 
     async def delete_server(self) -> None:
         """Delete the server."""
