@@ -1,0 +1,7 @@
+# Screenshots Directory
+
+This directory contains screenshots of the Minecraft TUI application.
+
+To generate screenshots, use Textual's built-in screenshot feature:
+- Press `Ctrl+S` while the app is running to save a screenshot
+- Or call `app.save_screenshot()` programmatically

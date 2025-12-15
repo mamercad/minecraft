@@ -1,6 +1,7 @@
 """Base Minecraft server installer."""
 
 import asyncio
+import contextlib
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -29,30 +30,70 @@ class BaseMinecraftInstaller(ABC):
         self.config = config
         self.ssh_client: paramiko.SSHClient | None = None
 
-    async def connect_ssh(self, host: str, username: str = "root", key_path: str | None = None):
-        """Establish SSH connection to droplet.
+    async def connect_ssh(
+        self,
+        host: str,
+        username: str = "root",
+        key_path: str | None = None,
+        max_retries: int = 12,
+        initial_delay: int = 5,
+        progress_callback: Callable[[str], None] | None = None,
+    ):
+        """Establish SSH connection to droplet with retry logic.
 
         Args:
             host: Droplet IP address
             username: SSH username
             key_path: Path to SSH private key
+            max_retries: Maximum number of retry attempts (default: 12)
+            initial_delay: Initial delay in seconds between retries (default: 5)
+            progress_callback: Optional callback for progress updates
 
         Raises:
-            SSHError: If connection fails
+            SSHError: If connection fails after all retries
         """
-        try:
-            self.ssh_client = paramiko.SSHClient()
-            self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            # Wrap blocking connect call with asyncio.to_thread
-            await asyncio.to_thread(
-                self.ssh_client.connect,
-                hostname=host,
-                username=username,
-                key_filename=key_path,
-                timeout=30,
-            )
-        except Exception as e:
-            raise SSHError(f"Failed to connect to {host}: {e}") from e
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                self.ssh_client = paramiko.SSHClient()
+                self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                # Wrap blocking connect call with asyncio.to_thread
+                await asyncio.to_thread(
+                    self.ssh_client.connect,
+                    hostname=host,
+                    username=username,
+                    key_filename=key_path,
+                    timeout=30,
+                )
+                if progress_callback:
+                    progress_callback(f"✓ SSH connection established to {host}")
+                return
+            except Exception as e:
+                last_error = e
+                # Clean up failed client
+                if self.ssh_client:
+                    with contextlib.suppress(Exception):
+                        self.ssh_client.close()
+                    self.ssh_client = None
+
+                # Last attempt - don't retry
+                if attempt == max_retries - 1:
+                    break
+
+                # Calculate exponential backoff delay
+                delay = initial_delay * (2**attempt)
+                if progress_callback:
+                    progress_callback(
+                        f"SSH connection failed (attempt {attempt + 1}/{max_retries}). "
+                        f"Retrying in {delay} seconds..."
+                    )
+
+                await asyncio.sleep(delay)
+
+        raise SSHError(
+            f"Failed to connect to {host} after {max_retries} attempts: {last_error}"
+        ) from last_error
 
     async def execute_command(
         self, command: str, progress_callback: Callable[[str], None] | None = None

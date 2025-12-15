@@ -11,7 +11,6 @@ class ProgressLog(RichLog):
         background: $surface;
         color: $text;
         border: solid $accent;
-        height: 20;
         scrollbar-size: 1 1;
     }
     """

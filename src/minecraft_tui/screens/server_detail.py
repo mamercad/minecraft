@@ -1,5 +1,6 @@
 """Server detail screen."""
 
+import pyperclip
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
@@ -170,6 +171,7 @@ class ServerDetailScreen(Screen):
                         f"[dim]Connect with:[/] [bold]{self.ip_address}:25565[/]",
                         classes="info-item",
                     )
+                    yield Button("Copy IP Address", variant="default", id="copy-ip-btn")
                 else:
                     yield Static(f"IP Address: {self.ip_address}", classes="info-item")
                 yield Static("Port: 25565 (default)", classes="info-item")
@@ -247,6 +249,19 @@ class ServerDetailScreen(Screen):
         """Handle back action (Escape key)."""
         self.app.pop_screen()
 
+    def copy_ip_address(self) -> None:
+        """Copy server IP address to clipboard."""
+        if self.ip_address and self.ip_address != "Pending...":
+            try:
+                pyperclip.copy(self.ip_address)
+                self.app.notify(
+                    f"IP address {self.ip_address} copied to clipboard", severity="information"
+                )
+            except Exception as e:
+                self.app.notify(f"Failed to copy IP address: {e}", severity="error")
+        else:
+            self.app.notify("No IP address available to copy", severity="warning")
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press."""
         if event.button.id == "back-btn":
@@ -255,6 +270,8 @@ class ServerDetailScreen(Screen):
             self.refresh_server()
         elif event.button.id == "console-btn":
             self.open_console()
+        elif event.button.id == "copy-ip-btn":
+            self.copy_ip_address()
         elif event.button.id == "poweron-btn":
             self.run_worker(self.power_on())
         elif event.button.id == "poweroff-btn":

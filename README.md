@@ -2,6 +2,22 @@
 
 A beautiful terminal user interface (TUI) for managing Minecraft servers on DigitalOcean droplets.
 
+## Screenshots
+
+![Main Menu](screenshots/main-menu.png)
+*Main menu with Minecraft creeper ASCII art*
+
+![Server Creation Wizard](screenshots/create-server.png)
+*5-step server creation wizard with server.properties editor*
+
+![Server List](screenshots/server-list.png)
+*View and manage all your Minecraft servers*
+
+![Server Console](screenshots/server-console.png)
+*Live server console with RCON command support*
+
+> **Note**: Screenshot generation coming soon. Use `Ctrl+S` in the app to capture screenshots.
+
 ## Features
 
 - **Easy Setup**: Simple onboarding with `$DIGITALOCEAN_TOKEN` environment variable

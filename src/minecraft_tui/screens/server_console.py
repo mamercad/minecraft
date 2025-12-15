@@ -1,5 +1,6 @@
 """Server console screen with RCON support."""
 
+from rich.markup import escape
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
@@ -114,7 +115,7 @@ class ServerConsoleScreen(Screen):
         try:
             # Initialize RCON service
             status.update("Initializing RCON connection...")
-            log.write(f"[cyan]Connecting to {self.ip_address}...[/]")
+            log.write(f"[cyan]Connecting to {escape(self.ip_address)}...[/]")
 
             self.rcon_service = RconService(self.ip_address)
 
@@ -123,17 +124,17 @@ class ServerConsoleScreen(Screen):
             log.write("[cyan]Retrieving RCON password from server...[/]")
             password = await self.rcon_service.get_rcon_password_from_server(self.ssh_key_path)
             log.write(f"[dim]Retrieved password (length: {len(password)} chars)[/]")
-            log.write(f"[dim]Password: {password}[/]")
+            log.write(f"[dim]Password: {escape(password)}[/]")
             log.write(f"[dim]Password bytes: {password.encode('utf-8').hex()}[/]")
 
             # Connect to RCON
             status.update("Connecting to RCON...")
             log.write("[cyan]Connecting to RCON...[/]")
-            log.write(f"[dim]Connecting with password: {password}[/]")
+            log.write(f"[dim]Connecting with password: {escape(password)}[/]")
             await self.rcon_service.connect(password)
 
             self.connected = True
-            status.update(f"[green]Connected to {self.ip_address}:25575[/]")
+            status.update(f"[green]Connected to {escape(self.ip_address)}:25575[/]")
             log.write("[green]✓ RCON connection established[/]")
             log.write("")
 
@@ -142,19 +143,27 @@ class ServerConsoleScreen(Screen):
 
         except RconError as e:
             error_str = str(e).lower()
-            status.update(f"[red]RCON Error: {e}[/]")
-            log.write(f"[red]✗ RCON connection failed: {e}[/]")
+            status.update(f"[red]RCON Error: {escape(str(e))}[/]")
+            log.write(f"[red]✗ RCON connection failed: {escape(str(e))}[/]")
             log.write("")
 
             # Provide specific guidance based on error type
             if "did not respond to authentication" in error_str:
-                log.write("[yellow bold]⚠ Server not responding to authentication - Likely password mismatch[/]")
+                log.write(
+                    "[yellow bold]⚠ Server not responding to authentication - Likely password mismatch[/]"
+                )
                 log.write("")
-                log.write("[cyan]This happens when the RCON password we sent doesn't match server.properties.[/]")
-                log.write("The server silently drops the connection instead of sending an error response.")
+                log.write(
+                    "[cyan]This happens when the RCON password we sent doesn't match server.properties.[/]"
+                )
+                log.write(
+                    "The server silently drops the connection instead of sending an error response."
+                )
                 log.write("")
                 log.write("[yellow bold]Verify the password:[/]")
-                log.write(f"  [dim]ssh root@{self.ip_address} 'grep \"^rcon\\.password=\" /opt/minecraft/server.properties'[/]")
+                log.write(
+                    f"  [dim]ssh root@{self.ip_address} 'grep \"^rcon\\.password=\" /opt/minecraft/server.properties'[/]"
+                )
                 log.write("")
                 log.write("[cyan bold]Common causes:[/]")
                 log.write("  1. Server was created before RCON support was added")
@@ -172,8 +181,14 @@ class ServerConsoleScreen(Screen):
                 log.write("    # Ensure rcon.address=0.0.0.0 exists")
                 log.write("    # If you change settings, restart:")
                 log.write("    systemctl restart minecraft")
-            elif "connection refused" in error_str or "errno 61" in error_str or "connect call failed" in error_str:
-                log.write("[yellow bold]⚠ Connection Refused - Nothing is listening on port 25575[/]")
+            elif (
+                "connection refused" in error_str
+                or "errno 61" in error_str
+                or "connect call failed" in error_str
+            ):
+                log.write(
+                    "[yellow bold]⚠ Connection Refused - Nothing is listening on port 25575[/]"
+                )
                 log.write("")
                 log.write("[cyan]Most likely causes:[/]")
                 log.write("  1. Minecraft server is not running")
@@ -183,10 +198,14 @@ class ServerConsoleScreen(Screen):
                 log.write("[yellow bold]Quick Diagnostics:[/]")
                 log.write("")
                 log.write("[yellow]• Check if Minecraft is running:[/]")
-                log.write(f"  [dim]ssh root@{self.ip_address} 'systemctl status minecraft | head -20'[/]")
+                log.write(
+                    f"  [dim]ssh root@{self.ip_address} 'systemctl status minecraft | head -20'[/]"
+                )
                 log.write("")
                 log.write("[yellow]• Check RCON configuration:[/]")
-                log.write(f"  [dim]ssh root@{self.ip_address} 'grep -E \"^(enable-rcon|rcon\\.)\" /opt/minecraft/server.properties'[/]")
+                log.write(
+                    f"  [dim]ssh root@{self.ip_address} 'grep -E \"^(enable-rcon|rcon\\.)\" /opt/minecraft/server.properties'[/]"
+                )
                 log.write("  [green]Expected output:[/]")
                 log.write("    enable-rcon=true")
                 log.write("    rcon.address=0.0.0.0")
@@ -194,8 +213,12 @@ class ServerConsoleScreen(Screen):
                 log.write("    rcon.password=<password>")
                 log.write("")
                 log.write("[yellow]• Check what's listening on RCON port:[/]")
-                log.write(f"  [dim]ssh root@{self.ip_address} 'ss -tlnp | grep :25575 || echo \"Nothing listening on 25575\"'[/]")
-                log.write("  [green]Expected:[/] 0.0.0.0:25575 or *:25575 (bound to all interfaces)")
+                log.write(
+                    f"  [dim]ssh root@{self.ip_address} 'ss -tlnp | grep :25575 || echo \"Nothing listening on 25575\"'[/]"
+                )
+                log.write(
+                    "  [green]Expected:[/] 0.0.0.0:25575 or *:25575 (bound to all interfaces)"
+                )
                 log.write("  [red]Problem:[/] 127.0.0.1:25575 (only localhost) or nothing at all")
                 log.write("")
                 log.write("[cyan bold]How to fix:[/]")
@@ -211,7 +234,9 @@ class ServerConsoleScreen(Screen):
                 log.write("  [yellow]Recommended: Recreate server with latest version[/]")
                 log.write("    (Newer servers have rcon.address=0.0.0.0 by default)")
             elif "timeout" in error_str:
-                log.write("[yellow bold]⚠ Connection Timeout - Server not responding on port 25575[/]")
+                log.write(
+                    "[yellow bold]⚠ Connection Timeout - Server not responding on port 25575[/]"
+                )
                 log.write("")
                 log.write("[cyan]Possible causes:[/]")
                 log.write("  1. Firewall blocking port 25575")
@@ -237,13 +262,17 @@ class ServerConsoleScreen(Screen):
                 log.write(f"   [dim]ssh root@{self.ip_address} 'systemctl status minecraft'[/]")
                 log.write("")
                 log.write("[yellow]2. Verify RCON configuration:[/]")
-                log.write(f"   [dim]ssh root@{self.ip_address} 'grep -E \"^(enable-rcon|rcon\\.)\" /opt/minecraft/server.properties'[/]")
+                log.write(
+                    f"   [dim]ssh root@{self.ip_address} 'grep -E \"^(enable-rcon|rcon\\.)\" /opt/minecraft/server.properties'[/]"
+                )
                 log.write("")
                 log.write("[yellow]3. Check server logs:[/]")
-                log.write(f"   [dim]ssh root@{self.ip_address} 'tail -50 /opt/minecraft/logs/latest.log'[/]")
+                log.write(
+                    f"   [dim]ssh root@{self.ip_address} 'tail -50 /opt/minecraft/logs/latest.log'[/]"
+                )
         except Exception as e:
-            status.update(f"[red]Error: {e}[/]")
-            log.write(f"[red]✗ Connection failed: {e}[/]")
+            status.update(f"[red]Error: {escape(str(e))}[/]")
+            log.write(f"[red]✗ Connection failed: {escape(str(e))}[/]")
 
     async def load_logs(self) -> None:
         """Load server logs."""
@@ -260,12 +289,12 @@ class ServerConsoleScreen(Screen):
             log.write("[dim]--- Recent Server Logs ---[/]")
             for line in logs:
                 if line.strip():
-                    log.write(line)
+                    log.write(escape(line))
             log.write("[dim]--- End of Logs ---[/]")
             log.write("")
 
         except RconError as e:
-            log.write(f"[red]Failed to load logs: {e}[/]")
+            log.write(f"[red]Failed to load logs: {escape(str(e))}[/]")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press."""
@@ -308,21 +337,21 @@ class ServerConsoleScreen(Screen):
             return
 
         try:
-            log.write(f"[cyan]> {command}[/]")
+            log.write(f"[cyan]> {escape(command)}[/]")
             response = await self.rcon_service.send_command(command)
 
             # Display response
             if response:
                 for line in response.split("\n"):
                     if line.strip():
-                        log.write(f"[green]{line}[/]")
+                        log.write(f"[green]{escape(line)}[/]")
             else:
                 log.write("[dim]Command executed (no response)[/]")
 
         except RconError as e:
-            log.write(f"[red]Command failed: {e}[/]")
+            log.write(f"[red]Command failed: {escape(str(e))}[/]")
         except Exception as e:
-            log.write(f"[red]Error: {e}[/]")
+            log.write(f"[red]Error: {escape(str(e))}[/]")
 
     def action_back(self) -> None:
         """Go back to previous screen."""

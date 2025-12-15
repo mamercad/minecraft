@@ -2,6 +2,7 @@
 
 import asyncio
 
+import pyperclip
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal
 from textual.screen import Screen
@@ -174,18 +175,20 @@ class ProgressScreen(Screen):
             else:
                 installer = ModpackInstaller(self.server_config)
 
-            # Connect via SSH
+            # Connect via SSH and install
             log.log_progress(f"Connecting via SSH using key: {settings.ssh_private_key_path}")
+
+            def progress_callback(message: str):
+                log.log_progress(message)
+
             await installer.connect_ssh(
                 host=self.droplet_ip,
                 username="root",
                 key_path=str(settings.ssh_private_key_path),
+                progress_callback=progress_callback,
             )
 
             # Run installation with progress callback
-            def progress_callback(message: str):
-                log.log_progress(message)
-
             await installer.install(progress_callback=progress_callback)
 
             installer.disconnect()
@@ -208,6 +211,18 @@ class ProgressScreen(Screen):
                 "The server is starting up. It may take a few minutes before it's ready."
             )
             log.log_progress("You can now connect to your Minecraft server!")
+
+            # Automatically copy connection details to clipboard
+            connection_string = f"{self.droplet_ip}:{self.server_config.server_port}"
+            try:
+                pyperclip.copy(connection_string)
+                self.app.notify(
+                    f"Connection details copied to clipboard: {connection_string}",
+                    severity="information",
+                )
+            except Exception as e:
+                # Don't fail if clipboard unavailable, just log it
+                log.log_progress(f"Note: Could not copy to clipboard: {e}")
 
             self.creation_complete = True
 
