@@ -1,6 +1,5 @@
 """Server creation wizard screen."""
 
-
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal
 from textual.screen import Screen
@@ -131,10 +130,10 @@ class CreateServerScreen(Screen):
         """Step 1: Select server type."""
         container.mount(Label("Select Server Type:"))
         radio_set = RadioSet(id="server-type")
+        container.mount(radio_set)
         radio_set.mount(RadioButton("Vanilla Minecraft", id="vanilla"))
         radio_set.mount(RadioButton("Forge (Modded)", id="forge"))
         radio_set.mount(RadioButton("Custom Modpack", id="modpack"))
-        container.mount(radio_set)
 
     def show_step_2(self, container: Container):
         """Step 2: Version selection."""
@@ -266,15 +265,21 @@ class CreateServerScreen(Screen):
 
     def create_server(self):
         """Create the server."""
-        # This would actually create the server
-        # For now, just show a message and go back to main menu
-        self.app.notify(f"Creating server: {self.server_data['name']}")
+        # Create ServerConfig from server_data
+        from ..models.server import ServerConfig
 
-        # In a full implementation, this would:
-        # 1. Create ServerConfig from server_data
-        # 2. Create DigitalOcean droplet
-        # 3. Wait for droplet to become active
-        # 4. SSH to droplet and install Minecraft
-        # 5. Show progress in a separate screen
+        config = ServerConfig(
+            name=self.server_data["name"],
+            server_type=self.server_data["server_type"],
+            minecraft_version=self.server_data["minecraft_version"],
+            forge_version=self.server_data.get("forge_version"),
+            modpack_url=self.server_data.get("modpack_url"),
+            max_players=self.server_data["max_players"],
+            memory_mb=self.server_data["memory_mb"],
+            accept_eula=self.server_data["accept_eula"],
+        )
 
-        self.app.pop_screen()
+        # Push progress screen to show server creation
+        from .progress import ProgressScreen
+
+        self.app.push_screen(ProgressScreen(config))
