@@ -195,7 +195,7 @@ class RconService:
         """
         debug_log(f"RconService.connect() called")
         debug_log(f"Host: {self.host}, Port: {self.port}")
-        debug_log(f"Password: {password} (len={len(password)})")
+        debug_log(f"Password length: {len(password)}")
 
         self.password = password
         try:

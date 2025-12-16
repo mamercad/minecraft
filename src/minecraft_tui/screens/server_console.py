@@ -124,13 +124,10 @@ class ServerConsoleScreen(Screen):
             log.write("[cyan]Retrieving RCON password from server...[/]")
             password = await self.rcon_service.get_rcon_password_from_server(self.ssh_key_path)
             log.write(f"[dim]Retrieved password (length: {len(password)} chars)[/]")
-            log.write(f"[dim]Password: {escape(password)}[/]")
-            log.write(f"[dim]Password bytes: {password.encode('utf-8').hex()}[/]")
 
             # Connect to RCON
             status.update("Connecting to RCON...")
             log.write("[cyan]Connecting to RCON...[/]")
-            log.write(f"[dim]Connecting with password: {escape(password)}[/]")
             await self.rcon_service.connect(password)
 
             self.connected = True
