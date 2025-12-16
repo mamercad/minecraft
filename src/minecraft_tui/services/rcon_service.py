@@ -3,7 +3,6 @@
 import asyncio
 import contextlib
 import struct
-import sys
 from pathlib import Path
 
 import paramiko
@@ -193,7 +192,7 @@ class RconService:
         Raises:
             RconError: If connection fails
         """
-        debug_log(f"RconService.connect() called")
+        debug_log("RconService.connect() called")
         debug_log(f"Host: {self.host}, Port: {self.port}")
         debug_log(f"Password length: {len(password)}")
 
@@ -205,7 +204,7 @@ class RconService:
                 self.reader, self.writer = await asyncio.wait_for(
                     asyncio.open_connection(self.host, self.port), timeout=10.0
                 )
-                debug_log(f"TCP connection established!")
+                debug_log("TCP connection established!")
             except ConnectionRefusedError as e:
                 raise RconError(
                     f"Connection refused to {self.host}:{self.port}. "
@@ -227,20 +226,20 @@ class RconService:
             debug_log(f"Request ID: {self.request_id}")
             self.writer.write(auth_packet)
             await self.writer.drain()
-            debug_log(f"Auth packet sent and drained")
+            debug_log("Auth packet sent and drained")
 
             # Wait for server to process (Minecraft can be slow)
             await asyncio.sleep(0.5)
-            debug_log(f"Waited 0.5s, now reading response...")
+            debug_log("Waited 0.5s, now reading response...")
 
             # Read authentication response (with longer timeout)
             try:
-                debug_log(f"Calling _read_packet() with 15s timeout...")
+                debug_log("Calling _read_packet() with 15s timeout...")
                 req_id, packet_type, _ = await asyncio.wait_for(
                     self._read_packet(), timeout=15.0
                 )
                 debug_log(f"Received response: req_id={req_id}, packet_type={packet_type}")
-            except asyncio.TimeoutError as e:
+            except TimeoutError as e:
                 raise RconError(
                     "Server did not respond to authentication request after 15 seconds. "
                     "Possible causes: (1) RCON password mismatch - server silently drops connection, "
@@ -261,7 +260,7 @@ class RconService:
             # Read the second response packet (RCON sends two responses for auth)
             try:
                 await asyncio.wait_for(self._read_packet(), timeout=5.0)
-            except (ConnectionResetError, BrokenPipeError, asyncio.IncompleteReadError, asyncio.TimeoutError):
+            except (TimeoutError, ConnectionResetError, BrokenPipeError, asyncio.IncompleteReadError):
                 # Sometimes server only sends one packet, that's ok if first packet succeeded
                 debug_log("Second packet not received (this is OK)")
                 pass
@@ -273,9 +272,9 @@ class RconService:
                     "The password in server.properties doesn't match."
                 )
 
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             raise RconError(
-                f"Connection timeout. Server may be overloaded or network issues. Try again."
+                "Connection timeout. Server may be overloaded or network issues. Try again."
             ) from e
         except RconError:
             raise

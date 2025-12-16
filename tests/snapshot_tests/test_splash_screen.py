@@ -1,7 +1,9 @@
 """Snapshot tests for splash screen."""
 
 import random
+
 from textual.app import App
+
 from minecraft_tui.screens.splash import SplashScreen
 
 

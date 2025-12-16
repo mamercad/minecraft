@@ -1,8 +1,9 @@
 """Pytest configuration and shared fixtures."""
 
 import os
-import pytest
 from pathlib import Path
+
+import pytest
 
 # Import all fixtures from fixtures directory
 pytest_plugins = [
@@ -15,8 +16,9 @@ pytest_plugins = [
 @pytest.fixture
 def mock_settings():
     """Mock Settings object for testing."""
-    from minecraft_tui.config import Settings
     from pydantic import SecretStr
+
+    from minecraft_tui.config import Settings
 
     return Settings(
         digitalocean_token=SecretStr("test_token_12345"),
@@ -25,7 +27,7 @@ def mock_settings():
         default_image="ubuntu-24-04-x64",
         ssh_key_path=Path("/fake/ssh/id_rsa.pub"),
         ssh_private_key_path=Path("/fake/ssh/id_rsa"),
-        default_java_version=21,
+        default_java_version="21",
     )
 
 

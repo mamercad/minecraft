@@ -2,6 +2,7 @@
 
 from textual.app import App
 from textual.pilot import Pilot
+
 from minecraft_tui.screens.welcome import WelcomeScreen
 
 

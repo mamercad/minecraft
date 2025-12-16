@@ -1,7 +1,8 @@
 """Mock fixtures for RCON service."""
 
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 
 
 @pytest.fixture
