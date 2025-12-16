@@ -101,6 +101,8 @@ class ServerConsoleScreen(Screen):
     def on_mount(self) -> None:
         """Initialize console connection."""
         self.run_worker(self.connect_to_server(), exclusive=True)
+        # Auto-focus the command input
+        self.query_one("#command-input", Input).focus()
 
     async def connect_to_server(self) -> None:
         """Connect to server RCON and load initial logs."""
