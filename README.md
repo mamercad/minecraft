@@ -17,6 +17,8 @@ A beautiful terminal user interface (TUI) for managing Minecraft servers on Digi
 *Live server console with RCON command support*
 
 > **Note**: Screenshot generation coming soon. Use `Ctrl+S` in the app to capture screenshots.
+>
+> For detailed text-based mockups of all screens, see [SCREENSHOTS.md](SCREENSHOTS.md).
 
 ## Features
 
@@ -166,22 +168,35 @@ minecraft/
 │   │   └── droplet.py
 │   ├── services/              # Backend services
 │   │   ├── digitalocean.py    # DigitalOcean API wrapper
+│   │   ├── rcon_service.py    # RCON service for server console
 │   │   └── minecraft/         # Minecraft installers
 │   │       ├── base.py
 │   │       ├── vanilla.py
 │   │       ├── forge.py
 │   │       └── modpack.py
 │   ├── screens/               # TUI screens
+│   │   ├── splash.py
 │   │   ├── welcome.py
 │   │   ├── main_menu.py
 │   │   ├── create_server.py
 │   │   ├── server_list.py
-│   │   └── server_detail.py
+│   │   ├── server_detail.py
+│   │   └── server_console.py
 │   └── widgets/               # Custom widgets
 │       ├── progress_log.py
 │       ├── server_card.py
 │       └── vi_radio_set.py
-└── tests/                     # Unit tests
+├── tests/                     # Test suite
+│   ├── conftest.py            # Pytest configuration and shared fixtures
+│   ├── fixtures/              # Mock fixtures for testing
+│   │   ├── mock_digitalocean.py
+│   │   ├── mock_ssh.py
+│   │   └── mock_rcon.py
+│   └── snapshot_tests/        # Visual regression tests
+│       ├── test_splash_screen.py
+│       ├── test_welcome_screen.py
+│       └── test_main_menu.py
+└── SCREENSHOTS.md             # Text-based mockups of all screens
 ```
 
 ## Development
@@ -197,6 +212,12 @@ uv run pytest --cov=src/minecraft_tui --cov-report=html
 
 # Run specific test file
 uv run pytest tests/test_config.py
+
+# Run snapshot tests (visual regression testing)
+uv run pytest tests/snapshot_tests/
+
+# Update snapshots (when intentional UI changes are made)
+uv run pytest tests/snapshot_tests/ --snapshot-update
 ```
 
 ### Code Quality

@@ -11,16 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - RCON service for remote console access to Minecraft servers with full protocol support
 - Server console screen with live command execution and log viewing
 - Comprehensive RCON error diagnostics with context-specific troubleshooting steps
-- Standalone RCON connection test utility (test_rcon.py) for independent diagnostics
 - Automatic RCON password generation and secure storage in server.properties
 - Debug logging to `/tmp/minecraft_tui_rcon_debug.log` for RCON troubleshooting
 - Detailed SSH diagnostic commands in error messages for common RCON issues
+- pytest-textual-snapshot for visual regression testing of TUI screens
+- Snapshot tests for splash screen, welcome screen, and main menu
+- Mock fixtures for DigitalOcean, SSH, and RCON services to support comprehensive testing
+- SCREENSHOTS.md with text-based mockups and documentation for all TUI screens
+- Pytest configuration with shared fixtures and animation disabling for consistent tests
 
 ### Fixed
 - RCON now binds to 0.0.0.0 (all interfaces) instead of localhost for external access
 - Server control buttons now appear on a single row instead of split across two rows
 - RCON authentication properly handles servers that send only one response packet
 - Connection timeout errors provide specific troubleshooting based on error type (connection refused vs timeout vs auth failure)
+
+### Security
+- Removed plain-text RCON password exposure in debug logs
+- RCON password now only logs length instead of actual password value
 
 ## [0.1.0] - 2024-12-15
 
