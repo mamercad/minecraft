@@ -10,6 +10,7 @@ from textual.widgets import Button, Footer, Header, Static
 
 from ..models.server import ServerConfig, ServerType
 from ..services.digitalocean import DigitalOceanService
+from ..services.minecraft.fabric import FabricInstaller
 from ..services.minecraft.forge import ForgeInstaller
 from ..services.minecraft.modpack import ModpackInstaller
 from ..services.minecraft.vanilla import VanillaInstaller
@@ -172,6 +173,8 @@ class ProgressScreen(Screen):
                 installer = VanillaInstaller(self.server_config)
             elif self.server_config.server_type == ServerType.FORGE:
                 installer = ForgeInstaller(self.server_config)
+            elif self.server_config.server_type == ServerType.FABRIC:
+                installer = FabricInstaller(self.server_config)
             else:
                 installer = ModpackInstaller(self.server_config)
 

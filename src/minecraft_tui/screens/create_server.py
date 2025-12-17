@@ -100,6 +100,7 @@ class CreateServerScreen(Screen):
             "server_type": ServerType.VANILLA,  # Default to vanilla
             "minecraft_version": "1.20.1",
             "forge_version": None,
+            "fabric_version": None,
             "modpack_url": None,
             "name": default_name,  # Auto-generated name
             "max_players": 20,
@@ -172,6 +173,7 @@ class CreateServerScreen(Screen):
         container.mount(radio_set)
         radio_set.mount(RadioButton("Vanilla Minecraft", id="vanilla", value=True))  # Default
         radio_set.mount(RadioButton("Forge (Modded)", id="forge"))
+        radio_set.mount(RadioButton("Fabric (Modded)", id="fabric"))
         radio_set.mount(RadioButton("Custom Modpack", id="modpack"))
 
     def show_step_2(self, container: Container):
@@ -190,6 +192,15 @@ class CreateServerScreen(Screen):
                     value=self.server_data.get("forge_version", ""),
                     placeholder="e.g., 47.2.0 (or leave empty for latest)",
                     id="forge-version",
+                )
+            )
+        elif self.server_data["server_type"] == ServerType.FABRIC:
+            container.mount(Label("Fabric Loader Version:"))
+            container.mount(
+                Input(
+                    value=self.server_data.get("fabric_version", ""),
+                    placeholder="e.g., 0.16.0 (or leave empty for latest)",
+                    id="fabric-version",
                 )
             )
         elif self.server_data["server_type"] == ServerType.MODPACK:
@@ -366,6 +377,8 @@ class CreateServerScreen(Screen):
         container.mount(Static(f"Minecraft Version: {self.server_data['minecraft_version']}"))
         if self.server_data.get("forge_version"):
             container.mount(Static(f"Forge Version: {self.server_data['forge_version']}"))
+        if self.server_data.get("fabric_version"):
+            container.mount(Static(f"Fabric Loader Version: {self.server_data['fabric_version']}"))
         if self.server_data.get("modpack_url"):
             container.mount(Static(f"Modpack URL: {self.server_data['modpack_url']}"))
         container.mount(Static(f"Server Name: {self.server_data['name']}"))
@@ -531,6 +544,8 @@ require-resource-pack=false
                     self.server_data["server_type"] = ServerType.VANILLA
                 elif button_id == "forge":
                     self.server_data["server_type"] = ServerType.FORGE
+                elif button_id == "fabric":
+                    self.server_data["server_type"] = ServerType.FABRIC
                 elif button_id == "modpack":
                     self.server_data["server_type"] = ServerType.MODPACK
                 return True
@@ -552,6 +567,9 @@ require-resource-pack=false
             if self.server_data["server_type"] == ServerType.FORGE:
                 forge_version = self.query_one("#forge-version", Input)
                 self.server_data["forge_version"] = forge_version.value or None
+            elif self.server_data["server_type"] == ServerType.FABRIC:
+                fabric_version = self.query_one("#fabric-version", Input)
+                self.server_data["fabric_version"] = fabric_version.value or None
             elif self.server_data["server_type"] == ServerType.MODPACK:
                 modpack_url = self.query_one("#modpack-url", Input)
                 self.server_data["modpack_url"] = modpack_url.value
@@ -677,6 +695,7 @@ require-resource-pack=false
             server_type=self.server_data["server_type"],
             minecraft_version=self.server_data["minecraft_version"],
             forge_version=self.server_data.get("forge_version"),
+            fabric_version=self.server_data.get("fabric_version"),
             modpack_url=self.server_data.get("modpack_url"),
             max_players=self.server_data["max_players"],
             memory_mb=self.server_data["memory_mb"],

@@ -8,6 +8,7 @@ def test_server_type_enum():
     """Test ServerType enum values."""
     assert ServerType.VANILLA == "vanilla"
     assert ServerType.FORGE == "forge"
+    assert ServerType.FABRIC == "fabric"
     assert ServerType.MODPACK == "modpack"
 
 
@@ -40,6 +41,20 @@ def test_server_config_forge():
 
     assert config.server_type == ServerType.FORGE
     assert config.forge_version == "47.2.0"
+
+
+def test_server_config_fabric():
+    """Test Fabric server configuration."""
+    config = ServerConfig(
+        name="Fabric Server",
+        server_type=ServerType.FABRIC,
+        minecraft_version="1.20.1",
+        fabric_version="0.16.0",
+        accept_eula=True,
+    )
+
+    assert config.server_type == ServerType.FABRIC
+    assert config.fabric_version == "0.16.0"
 
 
 def test_server_config_modpack():

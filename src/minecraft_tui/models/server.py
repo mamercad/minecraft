@@ -12,6 +12,7 @@ class ServerType(str, Enum):
 
     VANILLA = "vanilla"
     FORGE = "forge"
+    FABRIC = "fabric"
     MODPACK = "modpack"
 
 
@@ -29,6 +30,7 @@ class ServerConfig(BaseModel):
     server_type: ServerType
     minecraft_version: str = Field(..., description="Minecraft version (e.g., 1.20.1)")
     forge_version: str | None = Field(None, description="Forge version for Forge servers")
+    fabric_version: str | None = Field(None, description="Fabric loader version for Fabric servers")
     modpack_url: str | None = Field(None, description="URL to modpack zip for custom modpacks")
 
     # Server settings
