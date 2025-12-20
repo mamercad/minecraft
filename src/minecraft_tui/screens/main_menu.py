@@ -302,7 +302,7 @@ class MainMenuScreen(Screen):
         """Fetch account info and servers when screen loads."""
         # Initialize DataTable columns
         table = self.query_one(DataTable)
-        table.add_columns("ID", "Name", "Type", "IP", "Size", "$/mo", "Region", "Status", "Game")
+        table.add_columns("ID", "Name", "Type", "MC", "Loader", "IP", "Size", "Region", "Status", "Game")
         # Fetch account info and servers
         self.run_worker(self.fetch_account_info(), exclusive=True, group="account")
         self.run_worker(self.fetch_servers(), exclusive=True, group="servers")
@@ -372,7 +372,7 @@ class MainMenuScreen(Screen):
 
             if not droplets:
                 status.update("No servers found")
-                table.add_row("-", "No servers found", "-", "-", "-", "-", "-", "-", "-none-")
+                table.add_row("-", "No servers found", "-", "-", "-", "-", "-", "-", "-", "-none-")
                 return
 
             status.update(f"Found {len(droplets)} server(s)")
@@ -401,33 +401,15 @@ class MainMenuScreen(Screen):
                     elif tag_lower.startswith("lv-"):
                         loader_version = tag[3:]  # Remove "lv-" prefix
 
-                # Format type with versions
-                type_display = server_type
-                if server_type == "vanilla":
-                    if mc_version:
-                        type_display = f"vanilla {mc_version}"
-                elif server_type == "forge":
-                    parts = ["forge"]
-                    if mc_version:
-                        parts.append(mc_version)
-                    if loader_version:
-                        parts.append(f"({loader_version})")
-                    type_display = " ".join(parts)
-                elif server_type == "fabric":
-                    parts = ["fabric"]
-                    if mc_version:
-                        parts.append(mc_version)
-                    if loader_version:
-                        parts.append(f"({loader_version})")
-                    type_display = " ".join(parts)
-                elif server_type == "modpack":
-                    parts = ["modpack"]
-                    if modpack_loader:
-                        parts[0] = f"modpack ({modpack_loader})"
-                    if mc_version:
-                        parts.append(mc_version)
-                    # Don't show modpack_source - it's lossy due to DO tag restrictions
-                    type_display = " ".join(parts)
+                # Format type display (simplified)
+                if server_type == "modpack" and modpack_loader:
+                    type_display = f"modpack/{modpack_loader}"
+                else:
+                    type_display = server_type
+
+                # Format MC version and loader version for display
+                mc_display = mc_version or "-"
+                loader_display = loader_version or "-"
 
                 # Get IP address
                 ip_address = "Pending..."
@@ -438,7 +420,6 @@ class MainMenuScreen(Screen):
 
                 size_obj = droplet.get("size", {})
                 size = size_obj.get("slug", "Unknown")
-                price = f"${size_obj.get('price_monthly', '?')}"
                 region = droplet.get("region", {}).get("slug", "Unknown")
                 status_text = droplet.get("status", "unknown")
 
@@ -448,9 +429,10 @@ class MainMenuScreen(Screen):
                     droplet_id,
                     name,
                     type_display,
+                    mc_display,
+                    loader_display,
                     ip_address,
                     size,
-                    price,
                     region,
                     status_text,
                     "checking..",
@@ -464,7 +446,7 @@ class MainMenuScreen(Screen):
         except Exception as e:
             status.update(f"Error loading servers: {e}")
             table.clear()
-            table.add_row("-", "Error", "-", str(e)[:20], "-", "-", "-", "-", "-error-")
+            table.add_row("-", "Error", "-", "-", "-", str(e)[:20], "-", "-", "-", "-error-")
         finally:
             self._fetching_servers = False
 
@@ -478,8 +460,8 @@ class MainMenuScreen(Screen):
         if not self.droplet_map:
             return  # No servers to check
 
-        # Get the Game column key (it's the 9th column, index 8)
-        game_col_idx = 8
+        # Get the Game column key (it's the 10th column, index 9)
+        game_col_idx = 9
 
         # Debug: show we're starting the check
         status = self.query_one("#server-status", Static)
