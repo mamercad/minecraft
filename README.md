@@ -30,8 +30,11 @@ A beautiful terminal user interface (TUI) for managing Minecraft servers on Digi
 - **Automated Deployment**: Automatically provisions DigitalOcean droplets and installs Minecraft
 - **Security Hardening**: Automatic fail2ban, UFW firewall, and SSH key-only authentication
 - **Server Management**: Start, stop, restart, and delete servers from the TUI
+- **Game Controls**: Start/Stop Minecraft service directly from the TUI
+- **SSH Shell Access**: Open interactive SSH terminal to any server with one click
 - **Game Status Monitoring**: Live SSH checks show if Minecraft service is running
 - **Live Server Console**: View logs and send commands via RCON directly from the TUI
+- **Installation Logs**: View detailed installation logs even after server creation
 - **Customizable Properties**: Edit server.properties in a built-in editor before deployment
 - **Real-time Progress**: Stream installation progress with live updates
 - **Server Tagging**: Droplets tagged with type (vanilla/forge/fabric/modpack) and source
@@ -288,6 +291,44 @@ Access your server console directly from the TUI:
    - `tp player1 player2` - Teleport players
 
 All standard Minecraft commands are supported through RCON.
+
+## SSH Shell Access
+
+For full administrative access to your server:
+
+1. Select a running server in the server list
+2. Click "SSH Shell"
+3. The TUI temporarily suspends and opens an interactive SSH session as root
+4. You now have full shell access to:
+   - View and edit configuration files
+   - Check system logs (`journalctl -u minecraft`)
+   - Install additional software
+   - Debug issues directly on the server
+5. Type `exit` or press `Ctrl+D` to return to the TUI
+
+The SSH shell provides complete terminal functionality including colors, tab completion, and full-screen applications like vim or htop.
+
+## Game Service Controls
+
+Control the Minecraft service directly from the server detail pane:
+
+- **Start Game**: Starts the Minecraft systemd service (`systemctl start minecraft`)
+- **Stop Game**: Stops the Minecraft service gracefully (`systemctl stop minecraft`)
+
+The Game column in the server list shows the current service status:
+- `✓ running` - Minecraft is running
+- `stopped` - Service is stopped
+- `✗ failed` - Service failed to start (check logs)
+
+## Installation Logs
+
+Every server installation is logged to `/opt/minecraft/install.log`. To view:
+
+1. Select a server and click "View Console"
+2. Click "Install Log" to view the complete installation history
+3. Logs include timestamps and all installation steps
+
+This is useful for debugging failed installations or verifying what was installed.
 
 ## Troubleshooting
 

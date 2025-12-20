@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **SSH Shell**: Interactive terminal access to servers - suspends TUI and opens full SSH session as root
+- **Start/Stop Game Buttons**: Control Minecraft service directly from TUI (systemctl start/stop minecraft)
+- **Installation Log Viewing**: View server installation logs via "Install Log" button in server console
+- **Installation Log Capture**: All installation steps are saved to `/opt/minecraft/install.log` on the server
+- **Droplet ID in Delete Dialog**: Delete confirmation now shows droplet ID for verification
+- **Minecraft Version Selection for Modpacks**: Choose MC version in addition to loader version for modded servers
 - **CurseForge Integration**: Paste CurseForge modpack URLs to auto-detect modloader and download server packs
 - **Fabric Server Support**: Full support for Fabric modloader installations
 - **Modloader Version Dropdowns**: Select Forge/Fabric versions from live API data instead of manual input
