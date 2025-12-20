@@ -73,21 +73,41 @@ class ForgeInstaller(BaseMinecraftInstaller):
             InstallationError: If installation fails
         """
         try:
+            # Resolve Forge version early for logging
+            forge_version = await self.get_forge_version()
+
+            if progress_callback:
+                progress_callback("=" * 50)
+                progress_callback("FORGE SERVER INSTALLATION")
+                progress_callback(f"Minecraft Version: {self.config.minecraft_version}")
+                progress_callback(f"Forge Version: {forge_version}")
+                progress_callback(f"Server Name: {self.config.name}")
+                progress_callback(f"Memory: {self.config.memory_mb}MB")
+                progress_callback("=" * 50)
+
             # 0. Wait for cloud-init to complete
             await self.wait_for_cloud_init(progress_callback)
 
-            # 1. Install Java
+            # 1. Install Java (Forge needs JDK for installer)
             if progress_callback:
-                progress_callback("Installing Java 21...")
+                progress_callback("[1/11] Installing Java 21 (OpenJDK JDK + JRE)...")
+                progress_callback("(Forge installer requires JDK, not just JRE)")
             await self.execute_apt_with_retry(
                 "DEBIAN_FRONTEND=noninteractive apt-get update && "
                 "DEBIAN_FRONTEND=noninteractive apt-get install -y openjdk-21-jre-headless openjdk-21-jdk-headless",
                 progress_callback,
             )
 
+            # Verify Java installation
+            if progress_callback:
+                progress_callback("Verifying Java installation...")
+            stdout, _ = await self.execute_command("java -version 2>&1 | head -1", None)
+            if progress_callback:
+                progress_callback(f"Java: {stdout.strip()}")
+
             # 2. Create minecraft user and group
             if progress_callback:
-                progress_callback("Creating minecraft user...")
+                progress_callback("[2/11] Creating minecraft user...")
             await self.execute_command(
                 "useradd -r -m -d /opt/minecraft -s /bin/bash minecraft || true",
                 progress_callback,
@@ -95,17 +115,16 @@ class ForgeInstaller(BaseMinecraftInstaller):
 
             # 3. Create server directory
             if progress_callback:
-                progress_callback("Creating server directory...")
+                progress_callback("[3/11] Creating server directory /opt/minecraft...")
             await self.execute_command("mkdir -p /opt/minecraft", progress_callback)
 
-            # 4. Resolve Forge version and download installer
-            forge_version = await self.get_forge_version()
-            if progress_callback:
-                progress_callback(f"Installing Forge {forge_version} for Minecraft {self.config.minecraft_version}...")
-
+            # 4. Download Forge installer
             installer_url = await self.get_forge_installer_url(forge_version)
             if progress_callback:
-                progress_callback(f"Downloading Forge installer from: {installer_url}")
+                progress_callback(f"[4/11] Downloading Forge installer...")
+                progress_callback(f"Minecraft: {self.config.minecraft_version}")
+                progress_callback(f"Forge: {forge_version}")
+                progress_callback(f"URL: {installer_url}")
             try:
                 await self.execute_command(
                     f"wget -O /opt/minecraft/forge-installer.jar '{installer_url}'",
@@ -118,17 +137,36 @@ class ForgeInstaller(BaseMinecraftInstaller):
                     f"  Error: {e}"
                 ) from e
 
+            # Verify download
+            stdout, _ = await self.execute_command(
+                "ls -lh /opt/minecraft/forge-installer.jar | awk '{print $5}'", None
+            )
+            if progress_callback:
+                progress_callback(f"Downloaded forge-installer.jar: {stdout.strip()}")
+
             # 5. Run Forge installer
             if progress_callback:
-                progress_callback("Installing Forge (this may take a while)...")
+                progress_callback("[5/11] Running Forge installer (this may take 2-5 minutes)...")
+                progress_callback("The installer downloads Minecraft + Forge libraries...")
             await self.execute_command(
                 "cd /opt/minecraft && java -jar forge-installer.jar --installServer",
                 progress_callback,
             )
 
+            # Verify installation - list installed files
+            if progress_callback:
+                progress_callback("Verifying Forge installation...")
+            stdout, _ = await self.execute_command(
+                "ls -la /opt/minecraft/*.jar 2>/dev/null | head -5", None
+            )
+            if progress_callback:
+                for line in stdout.strip().split("\n"):
+                    if line.strip():
+                        progress_callback(f"  {line.split()[-1] if line.split() else line}")
+
             # 6. Create eula.txt
             if progress_callback:
-                progress_callback("Creating EULA...")
+                progress_callback("[6/11] Creating EULA (eula=true)...")
             eula_content = self.create_eula_txt()
             await self.execute_command(
                 f"echo '{eula_content}' > /opt/minecraft/eula.txt", progress_callback
@@ -136,16 +174,16 @@ class ForgeInstaller(BaseMinecraftInstaller):
 
             # 7. Create server.properties
             if progress_callback:
-                progress_callback("Configuring server...")
+                progress_callback("[7/11] Writing server.properties...")
             props_content = self.escape_for_shell(self.create_server_properties())
             await self.execute_command(
                 f"cat > /opt/minecraft/server.properties << 'EOF'\n{props_content}\nEOF",
                 progress_callback,
             )
 
-            # 8. Find the run script created by Forge
+            # 8. Configure startup script
             if progress_callback:
-                progress_callback("Configuring startup script...")
+                progress_callback("[8/11] Configuring startup script...")
 
             # Make run scripts executable
             await self.execute_command(
@@ -153,31 +191,56 @@ class ForgeInstaller(BaseMinecraftInstaller):
                 progress_callback,
             )
 
+            # Check if run.sh exists
+            stdout, _ = await self.execute_command(
+                "test -f /opt/minecraft/run.sh && echo 'exists' || echo 'missing'", None
+            )
+            if progress_callback:
+                if "exists" in stdout:
+                    progress_callback("Found run.sh script (will use for startup)")
+                else:
+                    progress_callback("No run.sh found (will use direct java command)")
+
             # 9. Set ownership
             if progress_callback:
-                progress_callback("Setting permissions...")
+                progress_callback("[9/11] Setting file ownership to minecraft:minecraft...")
             await self.execute_command(
                 "chown -R minecraft:minecraft /opt/minecraft", progress_callback
             )
 
             # 10. Create systemd service
             if progress_callback:
-                progress_callback("Creating systemd service...")
+                progress_callback("[10/11] Creating systemd service 'minecraft'...")
             service_content = self._create_systemd_service()
             await self.execute_command(
                 f"cat > /etc/systemd/system/minecraft.service << 'EOF'\n{service_content}\nEOF",
                 progress_callback,
             )
+            if progress_callback:
+                progress_callback("Service will use run.sh if available, otherwise direct java command")
 
             # 11. Start server
             if progress_callback:
-                progress_callback("Starting server...")
+                progress_callback("[11/11] Starting Forge Minecraft server...")
             await self.execute_command("systemctl daemon-reload", progress_callback)
             await self.execute_command("systemctl enable minecraft", progress_callback)
             await self.execute_command("systemctl start minecraft", progress_callback)
 
+            # Verify service started
+            stdout, _ = await self.execute_command("systemctl is-active minecraft", None)
             if progress_callback:
-                progress_callback("Installation complete!")
+                progress_callback(f"Service status: {stdout.strip()}")
+
+            # Show mods directory info
+            if progress_callback:
+                progress_callback("")
+                progress_callback("NOTE: Forge is installed but no mods are included.")
+                progress_callback("To add mods, upload .jar files to /opt/minecraft/mods/")
+                progress_callback("Then restart: systemctl restart minecraft")
+                progress_callback("")
+                progress_callback("=" * 50)
+                progress_callback("FORGE SERVER INSTALLATION COMPLETE")
+                progress_callback("=" * 50)
 
         except Exception as e:
             raise InstallationError(f"Forge server installation failed: {e}") from e
