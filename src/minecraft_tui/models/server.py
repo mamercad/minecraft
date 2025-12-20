@@ -32,6 +32,9 @@ class ServerConfig(BaseModel):
     forge_version: str | None = Field(None, description="Forge version for Forge servers")
     fabric_version: str | None = Field(None, description="Fabric loader version for Fabric servers")
     modpack_url: str | None = Field(None, description="URL to modpack zip for custom modpacks")
+    modpack_file_path: str | None = Field(None, description="Local file path to modpack zip")
+    modpack_loader: str | None = Field(None, description="Modloader for modpack (forge/fabric)")
+    modpack_loader_version: str | None = Field(None, description="Modloader version for modpack")
 
     # Server settings
     max_players: int = Field(default=20, ge=1, le=100)

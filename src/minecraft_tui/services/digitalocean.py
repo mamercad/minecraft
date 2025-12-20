@@ -1,6 +1,7 @@
 """DigitalOcean API service wrapper using PyDo."""
 
 import asyncio
+import contextlib
 from datetime import datetime
 
 from pydo import Client
@@ -144,6 +145,11 @@ class DigitalOceanService:
         size: str | None = None,
         image: str | None = None,
         user_data: str | None = None,
+        server_type: str | None = None,
+        modpack_loader: str | None = None,
+        modpack_source: str | None = None,
+        mc_version: str | None = None,
+        loader_version: str | None = None,
     ) -> dict:
         """Create a new droplet.
 
@@ -153,6 +159,11 @@ class DigitalOceanService:
             size: Droplet size (default from settings)
             image: OS image (default from settings)
             user_data: Cloud-init user data script
+            server_type: Minecraft server type (vanilla, forge, fabric, modpack)
+            modpack_loader: Modloader type for modpacks (forge, fabric)
+            modpack_source: Source indicator for modpacks (url, or filename)
+            mc_version: Minecraft version (e.g., "1.20.1")
+            loader_version: Forge/Fabric loader version (e.g., "47.2.0")
 
         Returns:
             Droplet information dictionary
@@ -163,6 +174,23 @@ class DigitalOceanService:
         # Ensure SSH key exists
         ssh_key_id = await self.ensure_ssh_key()
 
+        # Build tags list
+        tags = ["minecraft-tui", "minecraft-server"]
+        if server_type:
+            tags.append(server_type.lower())
+        if modpack_loader:
+            tags.append(f"loader-{modpack_loader.lower()}")
+        if modpack_source:
+            # Sanitize source for tag (lowercase, alphanumeric + hyphens only)
+            sanitized = modpack_source.lower().replace("_", "-").replace(" ", "-")
+            sanitized = "".join(c for c in sanitized if c.isalnum() or c == "-")
+            tags.append(f"source-{sanitized[:30]}")
+        if mc_version:
+            tags.append(f"mc-{mc_version}")
+        if loader_version:
+            # Truncate long version strings
+            tags.append(f"lv-{loader_version[:20]}")
+
         req = {
             "name": name,
             "region": region or self.settings.default_region,
@@ -172,7 +200,6 @@ class DigitalOceanService:
             "backups": False,
             "ipv6": True,
             "monitoring": True,
-            "tags": ["minecraft-tui", "minecraft-server"],
         }
 
         if user_data:
@@ -180,7 +207,29 @@ class DigitalOceanService:
 
         try:
             resp = await asyncio.to_thread(self.client.droplets.create, body=req)
-            return resp["droplet"]
+            droplet = resp["droplet"]
+            droplet_id = droplet["id"]
+
+            # Assign tags to the droplet after creation
+            # (pydo's tags in create doesn't work reliably)
+            for tag in tags:
+                # Create tag if it doesn't exist
+                with contextlib.suppress(Exception):
+                    await asyncio.to_thread(self.client.tags.create, body={"name": tag})
+
+                # Assign tag to droplet (best effort)
+                with contextlib.suppress(Exception):
+                    await asyncio.to_thread(
+                        self.client.tags.assign_resources,
+                        tag_id=tag,
+                        body={
+                            "resources": [
+                                {"resource_id": str(droplet_id), "resource_type": "droplet"}
+                            ]
+                        },
+                    )
+
+            return droplet
         except Exception as e:
             raise DigitalOceanError(f"Failed to create droplet: {e}") from e
 

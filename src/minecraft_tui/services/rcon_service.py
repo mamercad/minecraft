@@ -10,10 +10,12 @@ import paramiko
 # Debug logging to file
 DEBUG_LOG = Path("/tmp/minecraft_tui_rcon_debug.log")
 
+
 def debug_log(msg: str):
     """Write debug message to log file."""
     with open(DEBUG_LOG, "a") as f:
         import datetime
+
         timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
         f.write(f"[{timestamp}] {msg}\n")
         f.flush()
@@ -176,7 +178,9 @@ class RconService:
             debug_log(f"Got packet_data: {len(packet_data)} bytes")
             request_id, packet_type = struct.unpack("<ii", packet_data[:8])
             payload = packet_data[8:-2]  # Remove trailing null bytes
-            debug_log(f"Decoded: req_id={request_id}, type={packet_type}, payload_len={len(payload)}")
+            debug_log(
+                f"Decoded: req_id={request_id}, type={packet_type}, payload_len={len(payload)}"
+            )
 
             return request_id, packet_type, payload
         except Exception as e:
@@ -235,9 +239,7 @@ class RconService:
             # Read authentication response (with longer timeout)
             try:
                 debug_log("Calling _read_packet() with 15s timeout...")
-                req_id, packet_type, _ = await asyncio.wait_for(
-                    self._read_packet(), timeout=15.0
-                )
+                req_id, packet_type, _ = await asyncio.wait_for(self._read_packet(), timeout=15.0)
                 debug_log(f"Received response: req_id={req_id}, packet_type={packet_type}")
             except TimeoutError as e:
                 raise RconError(
@@ -260,7 +262,12 @@ class RconService:
             # Read the second response packet (RCON sends two responses for auth)
             try:
                 await asyncio.wait_for(self._read_packet(), timeout=5.0)
-            except (TimeoutError, ConnectionResetError, BrokenPipeError, asyncio.IncompleteReadError):
+            except (
+                TimeoutError,
+                ConnectionResetError,
+                BrokenPipeError,
+                asyncio.IncompleteReadError,
+            ):
                 # Sometimes server only sends one packet, that's ok if first packet succeeded
                 debug_log("Second packet not received (this is OK)")
                 pass
@@ -371,3 +378,55 @@ class RconService:
                 self.writer.close()
             self.writer = None
             self.reader = None
+
+    async def get_install_log(self, ssh_key_path: str) -> list[str]:
+        """Get the Minecraft server installation log via SSH.
+
+        Args:
+            ssh_key_path: Path to SSH private key
+
+        Returns:
+            List of installation log lines
+
+        Raises:
+            RconError: If log retrieval fails
+        """
+        try:
+            return await asyncio.to_thread(self._get_install_log_via_ssh, ssh_key_path)
+        except Exception as e:
+            raise RconError(f"Failed to retrieve installation log: {e}") from e
+
+    def _get_install_log_via_ssh(self, ssh_key_path: str) -> list[str]:
+        """Get installation log via SSH (blocking operation).
+
+        Args:
+            ssh_key_path: Path to SSH private key
+
+        Returns:
+            List of log lines
+        """
+        ssh_client = None
+        try:
+            ssh_client = paramiko.SSHClient()
+            ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh_client.connect(
+                hostname=self.host,
+                username="root",
+                key_filename=ssh_key_path,
+                timeout=10,
+            )
+
+            # Get the installation log
+            install_log_path = "/opt/minecraft/install.log"
+            stdin, stdout, stderr = ssh_client.exec_command(
+                f"cat {install_log_path} 2>/dev/null || echo 'Installation log not found at {install_log_path}'"
+            )
+            output = stdout.read().decode()
+
+            return output.split("\n")
+
+        except Exception as e:
+            raise RconError(f"Installation log retrieval failed: {e}") from e
+        finally:
+            if ssh_client:
+                ssh_client.close()

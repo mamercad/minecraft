@@ -16,7 +16,7 @@ def test_splash_screen_default(snap_compare):
             random.seed(42)
             screen = SplashScreen()
             # Disable auto-dismiss timer for snapshot
-            screen.set_timer = lambda *args, **kwargs: None
+            screen.set_timer = lambda *_args, **_kwargs: None
             self.push_screen(screen)
 
     assert snap_compare(
@@ -33,7 +33,7 @@ def test_splash_screen_variant(snap_compare):
             # Different seed for different creeper layout
             random.seed(123)
             screen = SplashScreen()
-            screen.set_timer = lambda *args, **kwargs: None
+            screen.set_timer = lambda *_args, **_kwargs: None
             self.push_screen(screen)
 
     assert snap_compare(

@@ -18,6 +18,8 @@ class MinecraftTUI(App):
     BINDINGS = [
         Binding("q", "quit", "Quit", priority=True),
         Binding("d", "toggle_dark", "Toggle Dark Mode"),
+        Binding("question_mark", "show_readme", "Help", show=True),
+        Binding("c", "show_changelog", "Changelog", show=False),
         # Vi-style navigation
         Binding("j", "focus_next", "Focus Next", show=False),
         Binding("k", "focus_previous", "Focus Previous", show=False),
@@ -53,3 +55,15 @@ class MinecraftTUI(App):
     def action_toggle_dark(self) -> None:
         """Toggle dark mode."""
         self.theme = "textual-dark" if self.theme == "textual-light" else "textual-light"
+
+    def action_show_readme(self) -> None:
+        """Show README modal."""
+        from .screens.docs_modal import ReadmeModal
+
+        self.push_screen(ReadmeModal())
+
+    def action_show_changelog(self) -> None:
+        """Show Changelog modal."""
+        from .screens.docs_modal import ChangelogModal
+
+        self.push_screen(ChangelogModal())

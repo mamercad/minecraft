@@ -1,5 +1,10 @@
 """Main menu screen."""
 
+import asyncio
+import contextlib
+from pathlib import Path
+
+import paramiko
 import pyperclip
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -38,6 +43,12 @@ class ConfirmDeleteModal(ModalScreen):
         color: $error;
     }
 
+    #droplet-id {
+        text-align: center;
+        margin-bottom: 1;
+        color: $text-muted;
+    }
+
     #warning {
         text-align: center;
         margin-bottom: 2;
@@ -54,9 +65,10 @@ class ConfirmDeleteModal(ModalScreen):
     }
     """
 
-    def __init__(self, server_name: str):
+    def __init__(self, server_name: str, droplet_id: int | None = None):
         super().__init__()
         self.server_name = server_name
+        self.droplet_id = droplet_id
 
     def compose(self) -> ComposeResult:
         """Compose the confirmation dialog."""
@@ -65,6 +77,11 @@ class ConfirmDeleteModal(ModalScreen):
                 f"Are you sure you want to delete server '{self.server_name}'?",
                 id="question",
             )
+            if self.droplet_id:
+                yield Label(
+                    f"Droplet ID: {self.droplet_id}",
+                    id="droplet-id",
+                )
             yield Label(
                 "This will permanently destroy the droplet and all data.",
                 id="warning",
@@ -97,6 +114,7 @@ class MainMenuScreen(Screen):
         self.selected_droplet_id: int | None = None
         self.selected_server_name: str | None = None
         self.selected_ip_address: str | None = None
+        self._fetching_servers = False  # Prevent duplicate fetches
 
     CSS = """
     MainMenuScreen {
@@ -111,9 +129,9 @@ class MainMenuScreen(Screen):
     #content-layout {
         width: 100%;
         height: auto;
-        max-height: 23;
+        max-height: 12;
         border: solid $accent;
-        padding: 2;
+        padding: 1;
         background: $surface;
         margin-bottom: 1;
     }
@@ -121,34 +139,30 @@ class MainMenuScreen(Screen):
     #creeper-art {
         width: auto;
         height: auto;
-        max-height: 23;
+        max-height: 10;
         color: $success;
         text-style: bold;
-        padding: 1 2;
-        margin-right: 2;
+        padding: 0 1;
+        margin-right: 1;
     }
 
     #menu-section {
         width: 1fr;
         height: auto;
-        max-height: 23;
-        padding: 1;
+        max-height: 10;
+        padding: 0 1;
     }
 
     #title {
-        text-align: center;
         text-style: bold;
         color: $accent;
-        margin-bottom: 1;
+        margin-bottom: 0;
     }
 
     #account-info {
-        text-align: center;
         color: $text-muted;
-        margin-bottom: 2;
-        padding: 1;
-        background: $panel;
-        border: solid $primary;
+        margin-bottom: 1;
+        padding: 0;
     }
 
     #server-list-container {
@@ -223,20 +237,14 @@ class MainMenuScreen(Screen):
 
     def compose(self) -> ComposeResult:
         """Compose the main menu."""
-        # Minecraft Creeper ASCII art
-        creeper = """
-    ████████████████
-    ████████████████
-    ██          ██
-    ██  ████  ████
-    ██  ████  ████
-    ██          ██
-    ████████████████
-    ██  ████████  ██
-    ██  ██    ██  ██
-    ██████    ██████
-    ████████████████
-        """
+        # Minecraft Creeper ASCII art (compact)
+        creeper = """████████████
+██        ██
+██ ██  ██ ██
+██        ██
+██ ██████ ██
+██ █    █ ██
+████████████"""
 
         yield Header()
         with Vertical(id="main-layout"):
@@ -279,7 +287,10 @@ class MainMenuScreen(Screen):
                 yield Static("[bold]Server Controls:[/]", classes="info-item")
                 with Horizontal(id="detail-buttons"):
                     yield Button("Power On", variant="success", id="poweron-btn")
+                    yield Button("Start Game", variant="success", id="startgame-btn")
                     yield Button("View Console", variant="success", id="console-btn")
+                    yield Button("SSH Shell", variant="success", id="ssh-btn")
+                    yield Button("Stop Game", variant="warning", id="stopgame-btn")
                     yield Button("Power Off", variant="warning", id="poweroff-btn")
                     yield Button("Reboot", variant="default", id="reboot-btn")
                     yield Button("Delete Server", variant="error", id="delete-btn")
@@ -291,15 +302,20 @@ class MainMenuScreen(Screen):
         """Fetch account info and servers when screen loads."""
         # Initialize DataTable columns
         table = self.query_one(DataTable)
-        table.add_columns("Name", "IP Address", "Size", "Region", "Status", "Created")
+        table.add_columns("ID", "Name", "Type", "IP", "Size", "$/mo", "Region", "Status", "Game")
         # Fetch account info and servers
-        self.run_worker(self.fetch_account_info(), exclusive=True)
-        self.run_worker(self.fetch_servers(), exclusive=False)
+        self.run_worker(self.fetch_account_info(), exclusive=True, group="account")
+        self.run_worker(self.fetch_servers(), exclusive=True, group="servers")
 
-    def on_resume(self) -> None:
+    def on_screen_resume(self) -> None:
         """Called when returning to this screen."""
-        # Refresh the server list when returning from detail view
-        self.run_worker(self.fetch_servers(), exclusive=False)
+        # Refresh the server list when returning from another screen
+        # Use call_after_refresh to ensure UI is ready
+        self.call_after_refresh(self._refresh_servers)
+
+    def _refresh_servers(self) -> None:
+        """Refresh the server list."""
+        self.run_worker(self.fetch_servers(), exclusive=True, group="servers")
 
     async def fetch_account_info(self) -> None:
         """Fetch and display DigitalOcean account information."""
@@ -334,6 +350,11 @@ class MainMenuScreen(Screen):
 
     async def fetch_servers(self) -> None:
         """Fetch servers from DigitalOcean API."""
+        # Prevent duplicate fetches
+        if self._fetching_servers:
+            return
+        self._fetching_servers = True
+
         table = self.query_one(DataTable)
         status = self.query_one("#server-status", Static)
 
@@ -351,14 +372,62 @@ class MainMenuScreen(Screen):
 
             if not droplets:
                 status.update("No servers found")
-                table.add_row("No servers found", "-", "-", "-", "-", "-")
+                table.add_row("-", "No servers found", "-", "-", "-", "-", "-", "-", "-none-")
                 return
 
             status.update(f"Found {len(droplets)} server(s)")
 
             # Add each droplet to the table
             for droplet in droplets:
+                droplet_id = str(droplet.get("id", "?"))
                 name = droplet.get("name", "Unknown")
+
+                # Get server type and versions from tags
+                tags = droplet.get("tags", [])
+                server_type = "unknown"
+                modpack_loader = None
+                mc_version = None
+                loader_version = None
+                type_tags = {"vanilla", "forge", "fabric", "modpack"}
+
+                for tag in tags:
+                    tag_lower = tag.lower()
+                    if tag_lower in type_tags:
+                        server_type = tag_lower
+                    elif tag_lower.startswith("loader-"):
+                        modpack_loader = tag_lower[7:]  # Remove "loader-" prefix
+                    elif tag_lower.startswith("mc-"):
+                        mc_version = tag[3:]  # Remove "mc-" prefix (preserve case)
+                    elif tag_lower.startswith("lv-"):
+                        loader_version = tag[3:]  # Remove "lv-" prefix
+
+                # Format type with versions
+                type_display = server_type
+                if server_type == "vanilla":
+                    if mc_version:
+                        type_display = f"vanilla {mc_version}"
+                elif server_type == "forge":
+                    parts = ["forge"]
+                    if mc_version:
+                        parts.append(mc_version)
+                    if loader_version:
+                        parts.append(f"({loader_version})")
+                    type_display = " ".join(parts)
+                elif server_type == "fabric":
+                    parts = ["fabric"]
+                    if mc_version:
+                        parts.append(mc_version)
+                    if loader_version:
+                        parts.append(f"({loader_version})")
+                    type_display = " ".join(parts)
+                elif server_type == "modpack":
+                    parts = ["modpack"]
+                    if modpack_loader:
+                        parts[0] = f"modpack ({modpack_loader})"
+                    if mc_version:
+                        parts.append(mc_version)
+                    # Don't show modpack_source - it's lossy due to DO tag restrictions
+                    type_display = " ".join(parts)
 
                 # Get IP address
                 ip_address = "Pending..."
@@ -367,23 +436,158 @@ class MainMenuScreen(Screen):
                         ip_address = network.get("ip_address", "Pending...")
                         break
 
-                size = droplet.get("size", {}).get("slug", "Unknown")
+                size_obj = droplet.get("size", {})
+                size = size_obj.get("slug", "Unknown")
+                price = f"${size_obj.get('price_monthly', '?')}"
                 region = droplet.get("region", {}).get("slug", "Unknown")
                 status_text = droplet.get("status", "unknown")
-                created_at = droplet.get("created_at", "Unknown")
 
-                # Format created_at to just date
-                if created_at != "Unknown":
-                    created_at = created_at.split("T")[0]
-
-                # Add row and store droplet data
-                row_key = table.add_row(name, ip_address, size, region, status_text, created_at)
+                # Add row and store droplet data (game status starts with placeholder)
+                # Use wide placeholder to set proper column width for "✓ running"
+                row_key = table.add_row(
+                    droplet_id,
+                    name,
+                    type_display,
+                    ip_address,
+                    size,
+                    price,
+                    region,
+                    status_text,
+                    "checking..",
+                )
                 self.droplet_map[row_key] = droplet
+
+            # Start background game status checks for active droplets
+            # Use exclusive=False so it doesn't get cancelled
+            self.run_worker(self.check_game_statuses(), exclusive=False, group="game-status")
 
         except Exception as e:
             status.update(f"Error loading servers: {e}")
             table.clear()
-            table.add_row("Error loading servers", str(e), "-", "-", "-", "-")
+            table.add_row("-", "Error", "-", str(e)[:20], "-", "-", "-", "-", "-error-")
+        finally:
+            self._fetching_servers = False
+
+    async def check_game_statuses(self) -> None:
+        """Check game server status for all active droplets via SSH."""
+        try:
+            table = self.query_one(DataTable)
+        except Exception:
+            return  # Table not ready
+
+        if not self.droplet_map:
+            return  # No servers to check
+
+        # Get the Game column key (it's the 9th column, index 8)
+        game_col_idx = 8
+
+        # Debug: show we're starting the check
+        status = self.query_one("#server-status", Static)
+        status.update(f"Checking game status for {len(self.droplet_map)} server(s)...")
+
+        # Find SSH key
+        ssh_private_key = None
+        default_key = self.app.settings.ssh_private_key_path
+        if default_key and Path(default_key).exists():
+            ssh_private_key = str(default_key)
+        else:
+            ssh_dir = Path.home() / ".ssh"
+            if ssh_dir.exists():
+                for pub_key in sorted(ssh_dir.glob("*.pub")):
+                    private_key = pub_key.parent / pub_key.stem
+                    if private_key.exists():
+                        ssh_private_key = str(private_key)
+                        break
+
+        if not ssh_private_key:
+            # Update all to show "no key" indicator
+            for row_key in self.droplet_map:
+                with contextlib.suppress(Exception):
+                    table.update_cell_at((table.get_row_index(row_key), game_col_idx), "no key")
+            return
+
+        # Check each active droplet
+        for row_key, droplet in list(self.droplet_map.items()):
+            try:
+                row_idx = table.get_row_index(row_key)
+            except Exception:
+                continue
+
+            if droplet.get("status") != "active":
+                # Update non-active droplets to show "-"
+                with contextlib.suppress(Exception):
+                    table.update_cell_at((row_idx, game_col_idx), "-")
+                continue
+
+            # Get IP address
+            ip_address = None
+            for network in droplet.get("networks", {}).get("v4", []):
+                if network.get("type") == "public":
+                    ip_address = network.get("ip_address")
+                    break
+
+            if not ip_address:
+                with contextlib.suppress(Exception):
+                    table.update_cell_at((row_idx, game_col_idx), "no ip")
+                continue
+
+            # Check game status via SSH
+            game_status = await self._check_single_game_status(ip_address, ssh_private_key)
+            with contextlib.suppress(Exception):
+                table.update_cell_at((row_idx, game_col_idx), game_status)
+
+        # Update status when done
+        with contextlib.suppress(Exception):
+            status.update(f"Found {len(self.droplet_map)} server(s)")
+
+    async def _check_single_game_status(self, ip: str, key_path: str) -> str:
+        """Check if Minecraft server is running on a single host."""
+        try:
+
+            def _ssh_check():
+                client = paramiko.SSHClient()
+                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                try:
+                    client.connect(
+                        hostname=ip,
+                        username="root",
+                        key_filename=key_path,
+                        timeout=10,
+                        banner_timeout=10,
+                        auth_timeout=10,
+                    )
+                    # Check systemd service status
+                    stdin, stdout, stderr = client.exec_command(
+                        "systemctl is-active minecraft 2>/dev/null || "
+                        "systemctl is-active minecraft-server 2>/dev/null || "
+                        "echo 'unknown'"
+                    )
+                    result = stdout.read().decode().strip()
+                    return result
+                finally:
+                    client.close()
+
+            result = await asyncio.to_thread(_ssh_check)
+
+            status_map = {
+                "active": "✓ running",
+                "inactive": "stopped",
+                "failed": "✗ failed",
+                "unknown": "? unknown",
+            }
+            return status_map.get(result, f"? {result[:10]}")
+
+        except TimeoutError:
+            return "timeout"
+        except Exception as e:
+            error_str = str(e).lower()
+            if "timeout" in error_str:
+                return "timeout"
+            elif "refused" in error_str:
+                return "refused"
+            elif "authentication" in error_str or "auth" in error_str:
+                return "auth err"
+            return "ssh err"
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press."""
@@ -402,12 +606,18 @@ class MainMenuScreen(Screen):
             self.copy_ip_address()
         elif event.button.id == "console-btn":
             self.open_console()
+        elif event.button.id == "ssh-btn":
+            self.open_ssh_shell()
         elif event.button.id == "poweron-btn":
             self.run_worker(self.power_on())
         elif event.button.id == "poweroff-btn":
             self.run_worker(self.power_off())
         elif event.button.id == "reboot-btn":
             self.run_worker(self.reboot())
+        elif event.button.id == "startgame-btn":
+            self.run_worker(self.start_game())
+        elif event.button.id == "stopgame-btn":
+            self.run_worker(self.stop_game())
         elif event.button.id == "delete-btn":
             self.confirm_delete()
 
@@ -493,12 +703,18 @@ class MainMenuScreen(Screen):
         try:
             if status == "active":
                 self.query_one("#poweron-btn", Button).display = False
+                self.query_one("#startgame-btn", Button).display = True
                 self.query_one("#console-btn", Button).display = True
+                self.query_one("#ssh-btn", Button).display = True
+                self.query_one("#stopgame-btn", Button).display = True
                 self.query_one("#poweroff-btn", Button).display = True
                 self.query_one("#reboot-btn", Button).display = True
             else:
                 self.query_one("#poweron-btn", Button).display = True
+                self.query_one("#startgame-btn", Button).display = False
                 self.query_one("#console-btn", Button).display = False
+                self.query_one("#ssh-btn", Button).display = False
+                self.query_one("#stopgame-btn", Button).display = False
                 self.query_one("#poweroff-btn", Button).display = False
                 self.query_one("#reboot-btn", Button).display = False
         except Exception:
@@ -587,6 +803,53 @@ class MainMenuScreen(Screen):
 
         self.app.push_screen(ServerConsoleScreen(self.selected_droplet, ssh_private_key))
 
+    def open_ssh_shell(self) -> None:
+        """Open an interactive SSH shell to the server."""
+        import subprocess
+
+        if not self.selected_droplet:
+            return
+
+        if not self.selected_ip_address or self.selected_ip_address == "Pending...":
+            self.app.notify("Server IP not available yet", severity="warning")
+            return
+
+        # Find SSH key
+        ssh_private_key = self._get_ssh_key()
+        if not ssh_private_key:
+            self.app.notify(
+                "No valid SSH key found. Please configure SSH_PRIVATE_KEY_PATH in settings.",
+                severity="error",
+            )
+            return
+
+        # Build SSH command
+        ssh_cmd = [
+            "ssh",
+            "-i", ssh_private_key,
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            f"root@{self.selected_ip_address}",
+        ]
+
+        # Use Textual's suspend to temporarily give control to the terminal
+        with self.app.suspend():
+            try:
+                # Print a helpful message
+                print(f"\n{'=' * 60}")
+                print(f"Connecting to {self.selected_server_name} ({self.selected_ip_address})...")
+                print(f"{'=' * 60}")
+                print("Type 'exit' or press Ctrl+D to return to the TUI.\n")
+
+                # Run SSH interactively
+                subprocess.run(ssh_cmd)
+
+                print(f"\n{'=' * 60}")
+                print("SSH session ended. Returning to TUI...")
+                print(f"{'=' * 60}\n")
+            except Exception as e:
+                print(f"\nSSH failed: {e}\n")
+
     async def power_on(self) -> None:
         """Power on the selected server."""
         if not self.selected_droplet_id:
@@ -659,6 +922,111 @@ class MainMenuScreen(Screen):
         except Exception as e:
             self.app.notify(f"Error rebooting server: {e}", severity="error")
 
+    async def start_game(self) -> None:
+        """Start the Minecraft game service on the server."""
+        if not self.selected_ip_address or self.selected_ip_address == "Pending...":
+            self.app.notify("Server IP not available", severity="error")
+            return
+
+        try:
+            self.app.notify(f"Starting Minecraft on {self.selected_server_name}...")
+
+            # Find SSH key
+            ssh_private_key = self._get_ssh_key()
+            if not ssh_private_key:
+                self.app.notify("No SSH key found", severity="error")
+                return
+
+            # Run systemctl start via SSH
+            result = await self._run_ssh_command(
+                self.selected_ip_address, ssh_private_key, "systemctl start minecraft"
+            )
+
+            if result:
+                self.app.notify(
+                    f"Minecraft started on {self.selected_server_name}", severity="information"
+                )
+            else:
+                self.app.notify(
+                    f"Start command sent to {self.selected_server_name}", severity="information"
+                )
+
+            # Refresh game status
+            self.run_worker(self.check_game_statuses(), exclusive=False, group="game-status")
+
+        except Exception as e:
+            self.app.notify(f"Error starting game: {e}", severity="error")
+
+    async def stop_game(self) -> None:
+        """Stop the Minecraft game service on the server."""
+        if not self.selected_ip_address or self.selected_ip_address == "Pending...":
+            self.app.notify("Server IP not available", severity="error")
+            return
+
+        try:
+            self.app.notify(f"Stopping Minecraft on {self.selected_server_name}...")
+
+            # Find SSH key
+            ssh_private_key = self._get_ssh_key()
+            if not ssh_private_key:
+                self.app.notify("No SSH key found", severity="error")
+                return
+
+            # Run systemctl stop via SSH
+            result = await self._run_ssh_command(
+                self.selected_ip_address, ssh_private_key, "systemctl stop minecraft"
+            )
+
+            if result:
+                self.app.notify(
+                    f"Minecraft stopped on {self.selected_server_name}", severity="warning"
+                )
+            else:
+                self.app.notify(
+                    f"Stop command sent to {self.selected_server_name}", severity="warning"
+                )
+
+            # Refresh game status
+            self.run_worker(self.check_game_statuses(), exclusive=False, group="game-status")
+
+        except Exception as e:
+            self.app.notify(f"Error stopping game: {e}", severity="error")
+
+    def _get_ssh_key(self) -> str | None:
+        """Find a valid SSH private key."""
+        default_key = self.app.settings.ssh_private_key_path
+        if default_key and Path(default_key).exists():
+            return str(default_key)
+
+        ssh_dir = Path.home() / ".ssh"
+        if ssh_dir.exists():
+            for pub_key in sorted(ssh_dir.glob("*.pub")):
+                private_key = pub_key.parent / pub_key.stem
+                if private_key.exists():
+                    return str(private_key)
+        return None
+
+    async def _run_ssh_command(self, ip: str, key_path: str, command: str) -> bool:
+        """Run a command on the server via SSH."""
+
+        def _ssh_exec():
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            try:
+                client.connect(
+                    hostname=ip,
+                    username="root",
+                    key_filename=key_path,
+                    timeout=10,
+                )
+                stdin, stdout, stderr = client.exec_command(command)
+                exit_status = stdout.channel.recv_exit_status()
+                return exit_status == 0
+            finally:
+                client.close()
+
+        return await asyncio.to_thread(_ssh_exec)
+
     def confirm_delete(self) -> None:
         """Show confirmation dialog before deleting."""
 
@@ -668,7 +1036,8 @@ class MainMenuScreen(Screen):
                 await self.delete_server()
 
         self.app.push_screen(
-            ConfirmDeleteModal(self.selected_server_name), handle_delete_confirmation
+            ConfirmDeleteModal(self.selected_server_name, self.selected_droplet_id),
+            handle_delete_confirmation,
         )
 
     async def delete_server(self) -> None:

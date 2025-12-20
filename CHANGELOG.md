@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **CurseForge Integration**: Paste CurseForge modpack URLs to auto-detect modloader and download server packs
+- **Fabric Server Support**: Full support for Fabric modloader installations
+- **Modloader Version Dropdowns**: Select Forge/Fabric versions from live API data instead of manual input
+- **Local Modpack Upload**: Upload modpack ZIPs directly via SFTP instead of requiring a URL
+- **Game Status Column**: Server list shows live Minecraft service status via SSH checks (✓ running, stopped, ✗ failed)
+- **Enhanced Server Tagging**: Droplets tagged with modloader type (forge/fabric) and source filename
+- **Droplet ID Column**: Server list now shows DigitalOcean droplet IDs
+- **Pricing Column**: Server list shows monthly cost ($/mo) for each droplet
+- **In-App Documentation**: Press `?` for README, `c` for Changelog popup windows
 - RCON service for remote console access to Minecraft servers with full protocol support
 - Server console screen with live command execution and log viewing
 - Comprehensive RCON error diagnostics with context-specific troubleshooting steps
@@ -21,14 +30,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pytest configuration with shared fixtures and animation disabling for consistent tests
 
 ### Fixed
+- Thread-safe progress updates using `call_from_thread` for SSH operations
+- Duplicate "No servers found" rows prevented with fetch flag
 - RCON now binds to 0.0.0.0 (all interfaces) instead of localhost for external access
 - Server control buttons now appear on a single row instead of split across two rows
 - RCON authentication properly handles servers that send only one response packet
 - Connection timeout errors provide specific troubleshooting based on error type (connection refused vs timeout vs auth failure)
+- Select widget options now use correct (label, value) format
 
 ### Security
 - Removed plain-text RCON password exposure in debug logs
 - RCON password now only logs length instead of actual password value
+
+### Changed
+- Modpack type display now shows "modpack (fabric) - filename.zip" format
+- Server list columns expanded: ID, Name, Type, IP, Size, $/mo, Region, Status, Game
 
 ## [0.1.0] - 2024-12-15
 

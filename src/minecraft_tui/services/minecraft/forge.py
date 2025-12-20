@@ -3,19 +3,60 @@
 from collections.abc import Callable
 
 from .base import BaseMinecraftInstaller, InstallationError
+from .loader_versions import LoaderVersionService
 
 
 class ForgeInstaller(BaseMinecraftInstaller):
     """Installer for Forge Minecraft servers."""
 
-    async def get_forge_installer_url(self) -> str:
+    async def get_forge_version(self) -> str:
+        """Get the actual Forge version to install.
+
+        If forge_version is None or "latest", fetches the latest version from the API.
+
+        Returns:
+            Actual Forge version number (e.g., "47.2.0")
+        """
+        forge_version = self.config.forge_version
+
+        # If a specific version is set, use it
+        if forge_version and forge_version != "latest":
+            return forge_version
+
+        # Otherwise, fetch the latest version from the API
+        mc_version = self.config.minecraft_version
+        service = LoaderVersionService()
+        versions = await service.fetch_forge_versions_detailed(mc_version, limit=1)
+
+        if versions:
+            # The detailed API returns versions like "1.20.1-47.4.13"
+            # We need to extract just the Forge version part
+            version = versions[0]
+            if version.startswith(f"{mc_version}-"):
+                version = version[len(f"{mc_version}-"):]
+            return version
+
+        # Fallback: try the promotions API
+        versions = await service.fetch_forge_versions(mc_version, limit=1)
+        if versions:
+            # Remove the "(recommended)" or "(latest)" suffix
+            version = versions[0].split(" ")[0]
+            return version
+
+        raise InstallationError(
+            f"Could not find any Forge versions for Minecraft {mc_version}"
+        )
+
+    async def get_forge_installer_url(self, forge_version: str) -> str:
         """Get Forge installer URL for the specified version.
+
+        Args:
+            forge_version: The Forge version number (e.g., "47.2.0")
 
         Returns:
             Forge installer download URL
         """
         mc_version = self.config.minecraft_version
-        forge_version = self.config.forge_version or "latest"
 
         # Construct Forge installer URL
         # Format: https://maven.minecraftforge.net/net/minecraftforge/forge/{version}/forge-{version}-installer.jar
@@ -57,14 +98,25 @@ class ForgeInstaller(BaseMinecraftInstaller):
                 progress_callback("Creating server directory...")
             await self.execute_command("mkdir -p /opt/minecraft", progress_callback)
 
-            # 4. Download Forge installer
+            # 4. Resolve Forge version and download installer
+            forge_version = await self.get_forge_version()
             if progress_callback:
-                progress_callback("Downloading Forge installer...")
-            installer_url = await self.get_forge_installer_url()
-            await self.execute_command(
-                f"wget -q -O /opt/minecraft/forge-installer.jar '{installer_url}'",
-                progress_callback,
-            )
+                progress_callback(f"Installing Forge {forge_version} for Minecraft {self.config.minecraft_version}...")
+
+            installer_url = await self.get_forge_installer_url(forge_version)
+            if progress_callback:
+                progress_callback(f"Downloading Forge installer from: {installer_url}")
+            try:
+                await self.execute_command(
+                    f"wget -O /opt/minecraft/forge-installer.jar '{installer_url}'",
+                    progress_callback,
+                )
+            except Exception as e:
+                raise InstallationError(
+                    f"Failed to download Forge installer.\n"
+                    f"  URL: {installer_url}\n"
+                    f"  Error: {e}"
+                ) from e
 
             # 5. Run Forge installer
             if progress_callback:

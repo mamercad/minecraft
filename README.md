@@ -23,15 +23,21 @@ A beautiful terminal user interface (TUI) for managing Minecraft servers on Digi
 ## Features
 
 - **Easy Setup**: Simple onboarding with `$DIGITALOCEAN_TOKEN` environment variable
-- **Multiple Server Types**: Support for Vanilla, Forge, and custom modpack servers
+- **Multiple Server Types**: Support for Vanilla, Forge, Fabric, and custom modpack servers
+- **CurseForge Integration**: Paste a CurseForge modpack URL and auto-detect modloader
+- **Modloader Version Dropdowns**: Select Forge/Fabric versions from live API data
+- **Local File Upload**: Upload modpack ZIPs directly via SFTP
 - **Automated Deployment**: Automatically provisions DigitalOcean droplets and installs Minecraft
 - **Security Hardening**: Automatic fail2ban, UFW firewall, and SSH key-only authentication
 - **Server Management**: Start, stop, restart, and delete servers from the TUI
+- **Game Status Monitoring**: Live SSH checks show if Minecraft service is running
 - **Live Server Console**: View logs and send commands via RCON directly from the TUI
 - **Customizable Properties**: Edit server.properties in a built-in editor before deployment
 - **Real-time Progress**: Stream installation progress with live updates
+- **Server Tagging**: Droplets tagged with type (vanilla/forge/fabric/modpack) and source
 - **Vi Key Bindings**: Navigate with j/k keys for a familiar vim-like experience
 - **Minecraft Themed UI**: Creeper ASCII art on splash screen (randomized each time) and main menu
+- **In-App Documentation**: View README and Changelog with `?` and `c` keys
 
 ## Requirements
 
@@ -111,6 +117,8 @@ The TUI supports both standard and vi-style key bindings:
 - `Enter` - Select / activate
 - `q` - Quit application
 - `d` - Toggle dark/light mode
+- `?` - Show README / Help
+- `c` - Show Changelog
 
 **Server List:**
 - `g` - Jump to top of list
@@ -129,6 +137,9 @@ You can configure the application using environment variables or a `.env` file:
 ```bash
 # Required
 DIGITALOCEAN_TOKEN=your_token_here
+
+# Optional - CurseForge integration (get key from https://console.curseforge.com)
+CURSEFORGE_API_KEY=your_curseforge_api_key
 
 # Optional (defaults shown)
 DEFAULT_REGION=nyc3
@@ -169,11 +180,14 @@ minecraft/
 │   ├── services/              # Backend services
 │   │   ├── digitalocean.py    # DigitalOcean API wrapper
 │   │   ├── rcon_service.py    # RCON service for server console
+│   │   ├── curseforge.py      # CurseForge API integration
 │   │   └── minecraft/         # Minecraft installers
 │   │       ├── base.py
 │   │       ├── vanilla.py
 │   │       ├── forge.py
-│   │       └── modpack.py
+│   │       ├── fabric.py
+│   │       ├── modpack.py
+│   │       └── loader_versions.py  # Forge/Fabric version fetching
 │   ├── screens/               # TUI screens
 │   │   ├── splash.py
 │   │   ├── welcome.py

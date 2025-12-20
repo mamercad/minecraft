@@ -1,5 +1,10 @@
 """Server list screen."""
 
+import asyncio
+import contextlib
+from pathlib import Path
+
+import paramiko
 import pyperclip
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -102,6 +107,7 @@ class ServerListScreen(Screen):
         self.selected_droplet_id: int | None = None
         self.selected_server_name: str | None = None
         self.selected_ip_address: str | None = None
+        self._fetching_servers = False  # Prevent duplicate fetches
 
     CSS = """
     ServerListScreen {
@@ -234,7 +240,7 @@ class ServerListScreen(Screen):
     def on_mount(self) -> None:
         """Initialize the server list."""
         table = self.query_one(DataTable)
-        table.add_columns("Name", "IP Address", "Size", "Region", "Status", "Created")
+        table.add_columns("ID", "Name", "Type", "IP", "Size", "$/mo", "Region", "Status", "Game")
         self.load_servers()
         # Focus the Back button by default
         self.query_one("#back-btn", Button).focus()
@@ -272,6 +278,11 @@ class ServerListScreen(Screen):
 
     async def fetch_servers(self) -> None:
         """Fetch servers from DigitalOcean API."""
+        # Prevent duplicate fetches
+        if self._fetching_servers:
+            return
+        self._fetching_servers = True
+
         table = self.query_one(DataTable)
         status = self.query_one("#status", Static)
 
@@ -289,14 +300,40 @@ class ServerListScreen(Screen):
 
             if not droplets:
                 status.update("No servers found")
-                table.add_row("No servers found", "-", "-", "-", "-", "-")
+                table.add_row("-", "No servers found", "-", "-", "-", "-", "-", "-", "-")
                 return
 
             status.update(f"Found {len(droplets)} server(s)")
 
             # Add each droplet to the table
             for droplet in droplets:
+                droplet_id = str(droplet.get("id", "?"))
                 name = droplet.get("name", "Unknown")
+
+                # Get server type from tags
+                tags = droplet.get("tags", [])
+                server_type = "unknown"
+                modpack_loader = None
+                modpack_source = None
+                type_tags = {"vanilla", "forge", "fabric", "modpack"}
+
+                for tag in tags:
+                    tag_lower = tag.lower()
+                    if tag_lower in type_tags:
+                        server_type = tag_lower
+                    elif tag_lower.startswith("loader-"):
+                        modpack_loader = tag_lower[7:]  # Remove "loader-" prefix
+                    elif tag_lower.startswith("source-"):
+                        modpack_source = tag_lower[7:]  # Remove "source-" prefix
+
+                # Format modpack type with loader and source
+                if server_type == "modpack":
+                    parts = ["modpack"]
+                    if modpack_loader:
+                        parts[0] = f"modpack ({modpack_loader})"
+                    if modpack_source and modpack_source != "url":
+                        parts.append(modpack_source)
+                    server_type = " - ".join(parts)
 
                 # Get IP address
                 ip_address = "Pending..."
@@ -305,23 +342,105 @@ class ServerListScreen(Screen):
                         ip_address = network.get("ip_address", "Pending...")
                         break
 
-                size = droplet.get("size", {}).get("slug", "Unknown")
+                size_obj = droplet.get("size", {})
+                size = size_obj.get("slug", "Unknown")
+                price = f"${size_obj.get('price_monthly', '?')}"
                 region = droplet.get("region", {}).get("slug", "Unknown")
                 status_text = droplet.get("status", "unknown")
-                created_at = droplet.get("created_at", "Unknown")
 
-                # Format created_at to just date
-                if created_at != "Unknown":
-                    created_at = created_at.split("T")[0]
-
-                # Add row and store droplet data
-                row_key = table.add_row(name, ip_address, size, region, status_text, created_at)
+                # Add row and store droplet data (game status starts as "...")
+                row_key = table.add_row(droplet_id, name, server_type, ip_address, size, price, region, status_text, "...")
                 self.droplet_map[row_key] = droplet
+
+            # Start background game status checks for active droplets
+            self.run_worker(self.check_game_statuses(), exclusive=True, group="game-status")
 
         except Exception as e:
             status.update(f"Error loading servers: {e}")
             table.clear()
-            table.add_row("Error loading servers", str(e), "-", "-", "-", "-")
+            table.add_row("-", "Error", "-", str(e)[:20], "-", "-", "-", "-", "-")
+        finally:
+            self._fetching_servers = False
+
+    async def check_game_statuses(self) -> None:
+        """Check game server status for all active droplets via SSH."""
+        table = self.query_one(DataTable)
+
+        # Find SSH key
+        ssh_private_key = None
+        default_key = self.app.settings.ssh_private_key_path
+        if default_key and Path(default_key).exists():
+            ssh_private_key = str(default_key)
+        else:
+            ssh_dir = Path.home() / ".ssh"
+            if ssh_dir.exists():
+                for pub_key in sorted(ssh_dir.glob("*.pub")):
+                    private_key = pub_key.parent / pub_key.stem
+                    if private_key.exists():
+                        ssh_private_key = str(private_key)
+                        break
+
+        if not ssh_private_key:
+            return  # Can't check without SSH key
+
+        # Check each active droplet
+        for row_key, droplet in list(self.droplet_map.items()):
+            if droplet.get("status") != "active":
+                # Update non-active droplets to show "-"
+                with contextlib.suppress(Exception):
+                    table.update_cell(row_key, "Game", "-")
+                continue
+
+            # Get IP address
+            ip_address = None
+            for network in droplet.get("networks", {}).get("v4", []):
+                if network.get("type") == "public":
+                    ip_address = network.get("ip_address")
+                    break
+
+            if not ip_address:
+                continue
+
+            # Check game status via SSH
+            game_status = await self._check_single_game_status(ip_address, ssh_private_key)
+            with contextlib.suppress(Exception):
+                table.update_cell(row_key, "Game", game_status)
+
+    async def _check_single_game_status(self, ip: str, key_path: str) -> str:
+        """Check if Minecraft server is running on a single host."""
+        try:
+            def _ssh_check():
+                client = paramiko.SSHClient()
+                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                try:
+                    client.connect(
+                        hostname=ip,
+                        username="root",
+                        key_filename=key_path,
+                        timeout=5,
+                    )
+                    # Check systemd service status
+                    stdin, stdout, stderr = client.exec_command(
+                        "systemctl is-active minecraft 2>/dev/null || "
+                        "systemctl is-active minecraft-server 2>/dev/null || "
+                        "echo 'unknown'"
+                    )
+                    result = stdout.read().decode().strip()
+                    return result
+                finally:
+                    client.close()
+
+            result = await asyncio.to_thread(_ssh_check)
+
+            status_map = {
+                "active": "✓ running",
+                "inactive": "stopped",
+                "failed": "✗ failed",
+            }
+            return status_map.get(result, "?")
+
+        except Exception:
+            return "?"  # Connection failed or timeout
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row selection in the table."""

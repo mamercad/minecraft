@@ -44,6 +44,12 @@ class Settings(BaseSettings):
         default="21", description="Default Java version for Minecraft servers"
     )
 
+    # CurseForge API settings
+    curseforge_api_key: SecretStr | None = Field(
+        default=None,
+        description="CurseForge API key from https://console.curseforge.com",
+    )
+
     # Application settings
     config_dir: Path = Field(
         default=Path.home() / ".config" / "minecraft-tui",

@@ -1,6 +1,7 @@
 """Server creation progress screen."""
 
 import asyncio
+import threading
 
 import pyperclip
 from textual.app import ComposeResult
@@ -28,7 +29,7 @@ class ProgressScreen(Screen):
 
     #progress-container {
         width: 100%;
-        height: 100%;
+        height: 1fr;
         border: solid $accent;
         padding: 2;
         background: $surface;
@@ -39,17 +40,23 @@ class ProgressScreen(Screen):
         text-style: bold;
         color: $accent;
         margin-bottom: 1;
+        height: auto;
     }
 
     #status {
         text-align: center;
         margin: 1 0;
         color: $text;
+        height: auto;
     }
 
     ProgressLog {
         height: 1fr;
         margin: 1 0;
+    }
+
+    Horizontal {
+        height: auto;
     }
 
     Button {
@@ -80,6 +87,20 @@ class ProgressScreen(Screen):
     def on_mount(self) -> None:
         """Start server creation when mounted."""
         self.run_worker(self.create_server(), exclusive=True)
+
+    def _thread_safe_log(self, message: str) -> None:
+        """Thread-safe progress logging - detects thread and uses appropriate method."""
+        if threading.current_thread() is threading.main_thread():
+            # Already on main thread, call directly
+            self._do_log(message)
+        else:
+            # On worker thread, use call_from_thread
+            self.app.call_from_thread(self._do_log, message)
+
+    def _do_log(self, message: str) -> None:
+        """Actually write to the log (called on main thread)."""
+        log = self.query_one(ProgressLog)
+        log.log_progress(message)
 
     async def create_server(self) -> None:
         """Create the server with progress updates."""
@@ -134,11 +155,34 @@ class ProgressScreen(Screen):
             log.log_progress("Configuring automatic security hardening (fail2ban, UFW)...")
 
             cloud_init = generate_cloud_init_config()
+
+            # Determine modpack source for tagging
+            modpack_source = None
+            if self.server_config.modpack_file_path:
+                # Use just the filename for the tag
+                modpack_source = Path(self.server_config.modpack_file_path).name
+            elif self.server_config.modpack_url:
+                modpack_source = "url"
+
+            # Determine loader version for tagging
+            loader_version = None
+            if self.server_config.server_type.value == "forge":
+                loader_version = self.server_config.forge_version
+            elif self.server_config.server_type.value == "fabric":
+                loader_version = self.server_config.fabric_version
+            elif self.server_config.modpack_loader:
+                loader_version = self.server_config.modpack_loader_version
+
             droplet = await do_service.create_droplet(
                 name=self.server_config.name,
                 size=droplet_size,
                 region=region,
                 user_data=cloud_init,
+                server_type=self.server_config.server_type.value,
+                modpack_loader=self.server_config.modpack_loader,
+                modpack_source=modpack_source,
+                mc_version=self.server_config.minecraft_version,
+                loader_version=loader_version,
             )
             self.droplet_id = droplet["id"]
             log.log_progress(f"Droplet created with ID: {self.droplet_id}")
@@ -181,18 +225,39 @@ class ProgressScreen(Screen):
             # Connect via SSH and install
             log.log_progress(f"Connecting via SSH using key: {settings.ssh_private_key_path}")
 
-            def progress_callback(message: str):
-                log.log_progress(message)
-
+            # Use thread-safe callback for SSH operations (they run in asyncio.to_thread)
             await installer.connect_ssh(
                 host=self.droplet_ip,
                 username="root",
                 key_path=str(settings.ssh_private_key_path),
-                progress_callback=progress_callback,
+                progress_callback=self._thread_safe_log,
             )
 
-            # Run installation with progress callback
-            await installer.install(progress_callback=progress_callback)
+            # Initialize the installation log file on the server
+            await installer.init_install_log(self._thread_safe_log)
+
+            # Create a wrapped callback that queues messages for file logging
+            wrapped_callback = installer.wrap_progress_callback(self._thread_safe_log)
+
+            # Run installation with wrapped progress callback
+            install_error = None
+            try:
+                await installer.install(progress_callback=wrapped_callback)
+            except Exception as install_exc:
+                install_error = install_exc
+                raise
+            finally:
+                # Flush queued log messages to the file
+                try:
+                    await installer.flush_log_queue(progress_callback=self._thread_safe_log)
+                    # Finalize the log with success/failure status
+                    await installer.finalize_install_log(
+                        success=(install_error is None),
+                        error_message=str(install_error) if install_error else None,
+                    )
+                    log.log_progress(f"Installation log saved to: {installer.INSTALL_LOG_PATH}")
+                except Exception as log_err:
+                    log.log_progress(f"Warning: Could not save installation log: {log_err}")
 
             installer.disconnect()
 

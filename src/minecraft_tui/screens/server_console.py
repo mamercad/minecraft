@@ -95,6 +95,7 @@ class ServerConsoleScreen(Screen):
                 )
                 yield Button("Send", variant="primary", id="send-btn")
                 yield Button("Refresh Logs", variant="default", id="refresh-btn")
+                yield Button("Install Log", variant="default", id="install-log-btn")
                 yield Button("Back", variant="default", id="back-btn")
         yield Footer()
 
@@ -142,8 +143,8 @@ class ServerConsoleScreen(Screen):
 
         except RconError as e:
             error_str = str(e).lower()
-            status.update(f"[red]RCON Error: {escape(str(e))}[/]")
-            log.write(f"[red]✗ RCON connection failed: {escape(str(e))}[/]")
+            status.update("[red]RCON connection failed[/]")
+            log.write(f"[red]✗ {escape(str(e))}[/]")
             log.write("")
 
             # Provide specific guidance based on error type
@@ -295,6 +296,44 @@ class ServerConsoleScreen(Screen):
         except RconError as e:
             log.write(f"[red]Failed to load logs: {escape(str(e))}[/]")
 
+    async def load_install_log(self) -> None:
+        """Load server installation log."""
+        log = self.query_one(RichLog)
+
+        if not self.ip_address:
+            log.write("[red]Cannot load installation log: No IP address[/]")
+            return
+
+        try:
+            log.write("[cyan]Loading installation log...[/]")
+
+            # Create a temporary RconService just to use its SSH methods
+            rcon_service = RconService(self.ip_address)
+            install_logs = await rcon_service.get_install_log(self.ssh_key_path)
+
+            log.write("")
+            log.write("[bold cyan]--- Installation Log ---[/]")
+            for line in install_logs:
+                if line.strip():
+                    # Highlight different types of log entries
+                    if line.startswith("#"):
+                        log.write(f"[dim]{escape(line)}[/]")
+                    elif "error" in line.lower() or "failed" in line.lower():
+                        log.write(f"[red]{escape(line)}[/]")
+                    elif "✓" in line or "success" in line.lower() or "complete" in line.lower():
+                        log.write(f"[green]{escape(line)}[/]")
+                    elif line.startswith("["):
+                        log.write(f"[yellow]{escape(line)}[/]")
+                    else:
+                        log.write(escape(line))
+            log.write("[bold cyan]--- End of Installation Log ---[/]")
+            log.write("")
+
+        except RconError as e:
+            log.write(f"[red]Failed to load installation log: {escape(str(e))}[/]")
+        except Exception as e:
+            log.write(f"[red]Error loading installation log: {escape(str(e))}[/]")
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press."""
         if event.button.id == "back-btn":
@@ -303,6 +342,8 @@ class ServerConsoleScreen(Screen):
             self.send_command()
         elif event.button.id == "refresh-btn":
             self.run_worker(self.load_logs())
+        elif event.button.id == "install-log-btn":
+            self.run_worker(self.load_install_log())
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle command input submission."""

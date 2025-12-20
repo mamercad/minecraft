@@ -41,6 +41,7 @@ uv.lock
 # Environment variables
 .env
 .env.local
+.envrc
 
 # Testing
 .pytest_cache/
