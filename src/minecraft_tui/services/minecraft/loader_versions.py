@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """Modloader version fetching service."""
 
 import aiohttp

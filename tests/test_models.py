@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """Tests for data models."""
 
 from minecraft_tui.models.droplet import DropletCreateRequest, DropletInfo

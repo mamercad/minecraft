@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """Progress log widget for installation progress."""
 
 from textual.widgets import RichLog

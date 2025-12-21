@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """Splash screen with ASCII art."""
 
 import random

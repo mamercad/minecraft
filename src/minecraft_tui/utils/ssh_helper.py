@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """SSH helper utilities."""
 
 from pathlib import Path

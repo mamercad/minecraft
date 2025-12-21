@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """Entry point for the Minecraft TUI application."""
 
 import sys

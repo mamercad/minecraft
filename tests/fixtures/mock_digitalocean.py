@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """Mock fixtures for DigitalOcean service."""
 
 from unittest.mock import AsyncMock

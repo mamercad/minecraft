@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """Snapshot tests for main menu screen."""
 
 from unittest.mock import AsyncMock, patch

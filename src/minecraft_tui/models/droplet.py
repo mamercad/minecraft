@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """DigitalOcean droplet data models."""
 
 from pydantic import BaseModel, Field

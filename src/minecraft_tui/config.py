@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """Configuration management using Pydantic Settings."""
 
 from pathlib import Path

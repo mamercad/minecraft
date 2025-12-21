@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """Server creation wizard screen."""
 
 from textual.app import ComposeResult

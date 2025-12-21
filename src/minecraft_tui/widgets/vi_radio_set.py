@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """RadioSet widget with vi key bindings."""
 
 from textual.binding import Binding

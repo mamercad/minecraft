@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """Server console screen with RCON support."""
 
 from rich.markup import escape

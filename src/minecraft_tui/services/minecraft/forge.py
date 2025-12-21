@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """Forge Minecraft server installer."""
 
 from collections.abc import Callable

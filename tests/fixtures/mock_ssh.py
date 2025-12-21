@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """Mock fixtures for SSH connections."""
 
 from unittest.mock import MagicMock

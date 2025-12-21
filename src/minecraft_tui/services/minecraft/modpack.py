@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """Custom modpack Minecraft server installer."""
 
 from collections.abc import Callable

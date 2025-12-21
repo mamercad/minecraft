@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """Documentation modal screens for README and Changelog."""
 
 from pathlib import Path

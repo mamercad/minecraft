@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """Snapshot tests for welcome screen."""
 
 from textual.app import App

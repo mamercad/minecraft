@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """Fabric Minecraft server installer."""
 
 from collections.abc import Callable
@@ -153,7 +154,7 @@ class FabricInstaller(BaseMinecraftInstaller):
                 progress_callback,
             )
             if progress_callback:
-                progress_callback(f"Service command: java -Xmx{self.config.memory_mb}M -jar server.jar nogui")
+                progress_callback(f"Service command: java -Xmx{self.config.memory_mb}M -jar server.jar")
 
             # 9. Start server
             if progress_callback:
@@ -196,7 +197,7 @@ Type=simple
 User=minecraft
 Group=minecraft
 WorkingDirectory=/opt/minecraft
-ExecStart=/usr/bin/java -Xmx{self.config.memory_mb}M -Xms{self.config.memory_mb}M -jar server.jar nogui
+ExecStart=/usr/bin/java -Xmx{self.config.memory_mb}M -Xms{self.config.memory_mb}M -jar server.jar
 Restart=on-failure
 RestartSec=10
 

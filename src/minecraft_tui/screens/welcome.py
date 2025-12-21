@@ -1,3 +1,4 @@
+# Copyright (c) 2025 Mark Mercado <mamercad@gmail.com>
 """Welcome screen for initial setup."""
 
 from textual.app import ComposeResult
